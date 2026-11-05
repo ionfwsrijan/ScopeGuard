@@ -103,6 +103,18 @@ The demo is deterministic: the clock is frozen at `2026-11-04`, the signing key
 is generated in a temporary directory, and the same inputs always produce the
 same packet hashes. It writes a full transcript to [`demo/transcript.md`](demo/transcript.md).
 
+A real signed receipt from that run is checked in at
+[`demo/receipt.json`](demo/receipt.json). Verify it without the ledger, the
+demo, or any credentials:
+
+```bash
+vouch --home .vouch/standalone verify --receipt demo/receipt.json
+```
+
+It passes signature, body-hash, id-derivation, duplicate-approval, and
+approval-binding checks from its own embedded public key. That is the artifact a
+customer or auditor would hold.
+
 ## Screenshots
 
 | The case | The signed receipt |

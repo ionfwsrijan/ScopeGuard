@@ -34,6 +34,12 @@ What to look for, in order:
 4. The tamper step in the demo: one character changed, verification fails.
 5. The handoff: only four approved commitments enter delivery.
 
+To verify the checked-in receipt without running anything:
+
+```bash
+vouch --home .vouch/standalone verify --receipt demo/receipt.json
+```
+
 ## Criteria mapping
 
 ### Use of Switch — 30%
@@ -138,6 +144,7 @@ does not depend on model behaviour.
 
 - [x] `README.md` with problem, flow, screenshots, quick start, honesty section
 - [x] `demo/transcript.md` — full 11-step run
+- [x] `demo/receipt.json` — a real signed receipt, verifiable standalone
 - [x] `demo/images/01-room.png`
 - [x] `demo/images/02-case.png`
 - [x] `demo/images/03-receipt.png`

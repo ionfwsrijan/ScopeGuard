@@ -1,0 +1,118 @@
+{
+  "body": {
+    "receipt_id": "vch_072ab073fdc4bcab3a226d9a",
+    "deal_id": "acme-2026",
+    "account": "Acme Corp",
+    "packet_id": "acme-2026-v2",
+    "packet_version": 2,
+    "packet_hash": "0f8fe1ab6a766d8aab34903cf880b5b9317030250193b7d68840b913baa87ab5",
+    "policy_id": "deal-policy-v1@v1",
+    "issued_at": "2026-11-04T09:00:00Z",
+    "expires_at": "2026-12-04T09:00:00Z",
+    "commitments": [
+      {
+        "claim_id": "SSO",
+        "verdict": "narrow",
+        "commitment": "SSO: beta available by 2026-12-15; GA targeted Q1 2027, not committed.",
+        "conditions": [
+          "Customer-facing language must say beta, not generally available.",
+          "No GA date commitment before Q1 2027."
+        ]
+      },
+      {
+        "claim_id": "SLA",
+        "verdict": "narrow",
+        "commitment": "99.90% monthly uptime SLA for the production API.",
+        "conditions": [
+          "Service credits follow the standard SLA schedule.",
+          "Planned maintenance windows are excluded from the measurement.",
+          "Uptime is measured monthly on the production API."
+        ]
+      },
+      {
+        "claim_id": "DISC",
+        "verdict": "narrow",
+        "commitment": "15.00% discount on the annual list price of 240,000 USD.",
+        "conditions": [
+          "Standard payment terms; no retroactive discount.",
+          "Quote valid for 30 days.",
+          "Discount capped at 15.00% without a documented CFO exception."
+        ]
+      },
+      {
+        "claim_id": "SOC2",
+        "verdict": "narrow",
+        "commitment": "SOC 2 Type II: in progress; report expected 2027-01-15. Not certified.",
+        "conditions": [
+          "Do not describe Vouch as certified until the report is issued.",
+          "Update the commitment when the report date becomes final."
+        ]
+      }
+    ],
+    "declined": [],
+    "approvals": [
+      {
+        "claim_id": "DISC",
+        "role": "AE",
+        "actor": "Priya",
+        "phrase": "APPROVE ACME-2026 DISC AS AE",
+        "approved_at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "claim_id": "DISC",
+        "role": "VP_SALES",
+        "actor": "Maya",
+        "phrase": "APPROVE ACME-2026 DISC AS VP_SALES",
+        "approved_at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "claim_id": "SLA",
+        "role": "AE",
+        "actor": "Priya",
+        "phrase": "APPROVE ACME-2026 SLA AS AE",
+        "approved_at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "claim_id": "SLA",
+        "role": "ENG_LEAD",
+        "actor": "Sam",
+        "phrase": "APPROVE ACME-2026 SLA AS ENG_LEAD",
+        "approved_at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "claim_id": "SOC2",
+        "role": "AE",
+        "actor": "Priya",
+        "phrase": "APPROVE ACME-2026 SOC2 AS AE",
+        "approved_at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "claim_id": "SOC2",
+        "role": "LEGAL",
+        "actor": "Alex",
+        "phrase": "APPROVE ACME-2026 SOC2 AS LEGAL",
+        "approved_at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "claim_id": "SSO",
+        "role": "AE",
+        "actor": "Priya",
+        "phrase": "APPROVE ACME-2026 SSO AS AE",
+        "approved_at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "claim_id": "SSO",
+        "role": "ENG_LEAD",
+        "actor": "Sam",
+        "phrase": "APPROVE ACME-2026 SSO AS ENG_LEAD",
+        "approved_at": "2026-11-04T09:00:00Z"
+      }
+    ],
+    "chain_prev": null,
+    "issuer": "Vouch"
+  },
+  "body_hash": "c283b784d7b12d0381edef7c7e9c0882a97958bd7403cdafa4146acea6e839f3",
+  "signature": "GJfgT6_p5gFRIlwEGRotQ53Y8C87fb7PndVRwwu1QUvmIpVCd0RyIEbxAfOx487iBomxfyxHygkaBbZxNVQcBQ==",
+  "public_key": "WsEfO5ReF9yeyOOiGGHxfaPKiubNqR3nPO0hEu1RnEg=",
+  "algorithm": "Ed25519"
+}

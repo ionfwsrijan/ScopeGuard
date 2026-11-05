@@ -194,6 +194,7 @@ Terminal beats to pause on:
 | `demo/images/01-room.png` | `/` — portfolio view, audit chain intact |
 | `demo/images/02-case.png` | `/deals/acme-2026` — packet, approvals, findings, handoff |
 | `demo/images/03-receipt.png` | `/receipts/<id>` — signed receipt and verification |
+| `demo/receipt.json` | A real signed receipt that verifies standalone |
 
 Regenerate them with Chrome headless after `vouch demo` and `vouch serve`:
 
