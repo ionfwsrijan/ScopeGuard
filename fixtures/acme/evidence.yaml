@@ -1,0 +1,53 @@
+deal_id: acme-2026
+evidence:
+  - id: EV-SSO-1
+    claim_id: SSO
+    kind: roadmap
+    source: "Product roadmap, Jira PLAN-441 (owner: Sam)"
+    observed_at: 2026-10-24
+    valid_until: 2026-12-31
+    summary: "SSO beta is scheduled for 2026-12-15; GA is planned for Q1 2027."
+    payload:
+      beta_date: 2026-12-15
+      ga_date: 2027-03-31
+      ga_quarter: Q1 2027
+      confidence: committed-beta
+
+  - id: EV-SLA-1
+    claim_id: SLA
+    kind: monitoring
+    source: "Production API availability dashboard, 90-day window"
+    observed_at: 2026-10-31
+    valid_until: 2026-11-30
+    summary: "90-day observed uptime is 99.92%; the contractual standard is 99.90%."
+    payload:
+      uptime_pct: 99.92
+      window_days: 90
+      standard_pct: 99.9
+      measurement: monthly
+      credits: true
+
+  - id: EV-DISC-1
+    claim_id: DISC
+    kind: pricing
+    source: "FY26 finance model, approved list and cost basis"
+    observed_at: 2026-10-15
+    valid_until: 2026-12-31
+    summary: "List price is 240,000 USD; cost ratio is 55%; gross-margin floor is 33%."
+    payload:
+      annual_list_price: 240000
+      cost_ratio_pct: 55
+      margin_floor_pct: 33
+
+  - id: EV-SOC2-1
+    claim_id: SOC2
+    kind: security_report
+    source: "Auditor status letter, trust.example.com/status"
+    observed_at: 2026-10-20
+    valid_until: 2027-02-28
+    summary: "SOC 2 Type II is in progress. The report is expected 2027-01-15."
+    payload:
+      status: in_progress
+      report_date: 2027-01-15
+      auditor: Meridian Assurance
+      scope: Security, Availability

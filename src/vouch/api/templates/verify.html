@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Verify a receipt - Vouch{% endblock %}
+{% block content %}
+
+<section class="verify-head">
+  <p class="eyebrow">Independent verification</p>
+  <h1>Paste a receipt.<br><em>Trust the math.</em></h1>
+  <p class="lede">Verification recomputes the body hash, checks the Ed25519 signature, confirms that every commitment has approvals, and validates the receipt id. It does not trust this server's database.</p>
+</section>
+
+<div class="verify-layout">
+  <form class="panel verify-form" method="post" action="/verify">
+    <label for="receipt">Receipt JSON</label>
+    <textarea id="receipt" name="receipt" spellcheck="false" placeholder='{"body": {"receipt_id": "vch_…", …}, "signature": "…"}'>{{ raw or '' }}</textarea>
+    <button class="button primary" type="submit">Verify receipt</button>
+    <p class="muted small">Tip: open a receipt and choose “Open signed JSON”, then paste it here.</p>
+  </form>
+
+  <aside class="verify-side">
+    {% if error %}
+    <div class="panel bad-panel">
+      <h2>Could not read that</h2>
+      <p class="bad">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Result</h2>
+        <span class="badge {{ 'ok' if result.ok else 'bad' }}">{{ 'verified' if result.ok else 'rejected' }}</span>
+      </div>
+      <p class="{{ 'ok' if result.ok else 'bad' }}">{{ result.summary }}</p>
+      <ul class="checks">
+        {% for check in result.checks %}
+        <li class="{{ 'ok' if check.ok else 'bad' }}">
+          <span class="check-dot"></span>
+          <span><strong>{{ check.code }}</strong><br>{{ check.detail }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% if receipt %}
+      <a class="button ghost wide" href="/receipts/{{ receipt.body.receipt_id }}">Open receipt</a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if not result and not error %}
+    <div class="panel">
+      <h2>What is checked</h2>
+      <ul class="plain-list">
+        <li>Canonical body hash</li>
+        <li>Ed25519 signature against the embedded key</li>
+        <li>Receipt id derived from signed fields</li>
+        <li>One approval per claim and role</li>
+        <li>Every commitment has an approval</li>
+        <li>Local packet rehash, when the packet is present</li>
+      </ul>
+    </div>
+    {% endif %}
+  </aside>
+</div>
+
+{% endblock %}

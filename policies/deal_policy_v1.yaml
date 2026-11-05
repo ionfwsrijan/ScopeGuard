@@ -1,0 +1,35 @@
+id: deal-policy-v1
+version: 1
+currency: USD
+max_evidence_age_days: 90
+
+discount:
+  # Hard ceiling. Above this an ask is narrowed even before the Examiner.
+  max_pct: 20
+  # Above this the Actuary may assess, but the Examiner requires a CFO
+  # exception reference that is not present in this workflow.
+  autonomy_pct: 15
+  # Gross margin floor after discount. With a 55% cost ratio, 15% discount
+  # yields 35.29% margin and 20% yields 31.25%.
+  margin_floor_pct: 33
+
+sla:
+  max_uptime_pct: 99.95
+  standard_uptime_pct: 99.9
+  min_observed_uptime_pct: 99.9
+  credit_required: true
+  maintenance_language_required: true
+
+feature:
+  allow_beta: true
+  allow_roadmap: true
+
+security:
+  allowed_statuses: [certified, in_progress]
+  require_report_date_for_in_progress: true
+
+approval_matrix:
+  feature: [AE, ENG_LEAD]
+  sla: [AE, ENG_LEAD]
+  discount: [AE, VP_SALES]
+  security: [AE, LEGAL]

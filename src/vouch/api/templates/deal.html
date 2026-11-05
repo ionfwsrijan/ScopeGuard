@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}{{ case.deal.account }} - Vouch{% endblock %}
+{% block content %}
+
+<nav class="crumbs"><a href="/">Ledger</a><span>/</span><span>{{ case.deal.id }}</span></nav>
+
+<section class="deal-head">
+  <div>
+    <p class="eyebrow">Deal underwriting</p>
+    <h1>{{ case.deal.account }}</h1>
+    <p class="mono muted">{{ case.deal.id }} · requested by {{ case.deal.requested_by }} · {{ case.deal.currency }} {{ case.deal.annual_list_price|money }} list</p>
+  </div>
+  <div class="deal-status">
+    {% if case.receipt %}
+      <span class="badge ok big">sealed</span>
+      <a class="mono" href="/receipts/{{ case.receipt.body.receipt_id }}">{{ case.receipt.body.receipt_id }}</a>
+    {% elif case.packet %}
+      <span class="badge {{ 'bad' if case.packet.status == 'blocked' else 'warn' }} big">{{ case.packet.status }}</span>
+      <span class="mono muted">v{{ case.packet.version }} · {{ case.packet.packet_hash|short(16) }}…</span>
+    {% endif %}
+  </div>
+</section>
+
+<div class="deal-layout">
+  <div class="deal-main">
+
+    {% if case.packet %}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Commitment packet v{{ case.packet.version }}</h2>
+        <span class="mono muted">{{ case.packet.packet_hash[:32] }}…</span>
+      </div>
+      <div class="decision-list">
+        {% for d in case.packet.decisions %}
+        <article class="decision {{ d.verdict|verdict_class }}">
+          <div class="decision-head">
+            <span class="claim-id mono">{{ d.claim_id }}</span>
+            <span class="verdict {{ d.verdict|verdict_class }}">{{ d.verdict }}</span>
+            <span class="decision-roles">needs {{ d.required_roles|join(' + ') }}</span>
+          </div>
+          <p class="commitment">{{ d.approved_text }}</p>
+          {% if d.conditions %}
+          <ul class="conditions">
+            {% for c in d.conditions %}<li>{{ c }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+          <p class="rationale">{{ d.rationale }}</p>
+          <div class="decision-foot">
+            <span class="mono muted">{{ d.policy_refs|join(' · ') }}</span>
+            <span class="mono muted">{{ d.evidence_ids|join(' · ') }}</span>
+          </div>
+          <div class="decision-approvals">
+            {% for a in case.valid_approvals if a.claim_id == d.claim_id %}
+              <span class="sig">{{ a.role }} · {{ a.actor }}</span>
+            {% else %}
+              <span class="sig missing">awaiting {{ d.required_roles|join(', ') }}</span>
+            {% endfor %}
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    {% if case.packet.findings %}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Examiner findings</h2>
+        <span class="muted">{{ case.blocks|length }} blocking</span>
+      </div>
+      <div class="findings">
+        {% for f in case.packet.findings %}
+        <div class="finding {{ f.severity|severity_class }}">
+          <span class="severity">{{ f.severity }}</span>
+          <div>
+            <p><strong class="mono">{{ f.code }}</strong> · {{ f.claim_id or 'packet' }}</p>
+            <p>{{ f.message }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% else %}
+    <section class="empty">
+      <h3>No packet yet.</h3>
+      <p>Evidence is ingested. Run <code>vouch assess --deal {{ case.deal.id }}</code> to underwrite the asks.</p>
+    </section>
+    {% endif %}
+
+    {% if case.approvals %}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Approval record</h2>
+        <span class="muted">{{ case.valid_approvals|length }} valid · {{ case.stale_approvals|length }} stale</span>
+      </div>
+      <table class="table">
+        <thead><tr><th>Claim</th><th>Role</th><th>Actor</th><th>Phrase</th><th>Status</th><th>Bound hash</th></tr></thead>
+        <tbody>
+          {% for a in case.approvals %}
+          <tr class="{{ 'is-stale' if a.status == 'stale' else '' }}">
+            <td class="mono">{{ a.claim_id }}</td>
+            <td>{{ a.role }}</td>
+            <td>{{ a.actor }}</td>
+            <td class="mono phrase">{{ a.phrase }}</td>
+            <td><span class="badge {{ 'ok' if a.status == 'valid' else 'muted' }}">{{ a.status }}</span></td>
+            <td class="mono muted">{{ a.packet_hash|short(12) }}…</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if case.stale_approvals %}
+      <p class="note warn">Stale approvals are kept as an audit record. They never count toward the current packet.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if handoff %}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Delivery handoff</h2>
+        <span class="badge ok">sealed only</span>
+      </div>
+      <pre class="handoff">{{ handoff }}</pre>
+    </section>
+    {% endif %}
+
+  </div>
+
+  <aside class="deal-rail">
+    <section class="panel gate-panel">
+      <h2>Human gate</h2>
+      {% if case.gate %}
+        <p class="gate-state {{ 'ok' if case.gate.ok else 'warn' }}">
+          {{ 'Clear to seal' if case.gate.ok else 'Not clear' }}
+        </p>
+        <ul class="checks">
+          {% for check in case.gate.checks %}
+          <li class="{{ 'ok' if check.ok else 'bad' }}">
+            <span class="check-dot"></span>
+            <span><strong>{{ check.code }}</strong><br>{{ check.detail }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% if case.pending %}
+        <div class="pending">
+          <p class="muted">Pending approvals</p>
+          {% for p in case.pending %}<span class="chip warn">{{ p }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      {% else %}
+        <p class="muted">No packet to gate yet.</p>
+      {% endif %}
+    </section>
+
+    {% if case.receipt %}
+    <section class="panel">
+      <h2>Receipt</h2>
+      <a class="receipt-button" href="/receipts/{{ case.receipt.body.receipt_id }}">
+        <span class="mono">{{ case.receipt.body.receipt_id }}</span>
+        <span class="ok">{{ 'Verified' if case.verification and case.verification.ok else 'Check failed' }} →</span>
+      </a>
+      <p class="muted small">Issued {{ case.receipt.body.issued_at.date() }} · expires {{ case.receipt.body.expires_at.date() }}</p>
+      <p class="muted small">Body hash <span class="mono">{{ case.receipt.body_hash|short(18) }}…</span></p>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <h2>Deal facts</h2>
+      <dl class="facts">
+        <dt>Claims</dt><dd>{{ case.deal.claims|length }}</dd>
+        <dt>Evidence</dt><dd>{{ case.evidence_count }}</dd>
+        <dt>Packets</dt><dd>{{ case.packet_count }}</dd>
+        <dt>Cost ratio</dt><dd>{{ case.deal.cost_ratio_pct }}%</dd>
+        <dt>List price</dt><dd>{{ case.deal.currency }} {{ case.deal.annual_list_price|money }}</dd>
+      </dl>
+      <p class="muted small">{{ case.deal.context }}</p>
+    </section>
+
+    <section class="panel">
+      <h2>Audit tail</h2>
+      <ol class="audit">
+        {% for event in audit %}
+        <li>
+          <span class="mono">{{ event.kind }}</span>
+          <span class="muted">{{ event.actor }} · {{ event.at[11:19] }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+  </aside>
+</div>
+
+{% endblock %}

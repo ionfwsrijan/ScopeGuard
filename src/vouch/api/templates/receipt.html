@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{{ receipt.body.receipt_id }} - Vouch{% endblock %}
+{% block content %}
+
+<nav class="crumbs"><a href="/">Ledger</a><span>/</span><a href="/deals/{{ receipt.body.deal_id }}">{{ receipt.body.deal_id }}</a><span>/</span><span>receipt</span></nav>
+
+<div class="receipt-layout">
+  <article class="voucher">
+    <header class="voucher-head">
+      <div class="voucher-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 36" width="30" height="34"><path d="M16 1.5 29 6v11.2c0 8.2-5.4 14.4-13 17.3C8.4 31.6 3 25.4 3 17.2V6L16 1.5Z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="m9.5 17.4 4.2 4.2 8.8-9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <div>
+          <p class="voucher-title">Vouch Receipt</p>
+          <p class="mono muted">{{ receipt.body.receipt_id }}</p>
+        </div>
+      </div>
+      <div class="voucher-seal {{ 'ok' if result.ok else 'bad' }}">
+        <span>{{ 'VERIFIED' if result.ok else 'INVALID' }}</span>
+        <small>Ed25519</small>
+      </div>
+    </header>
+
+    <div class="voucher-meta">
+      <div><span>Account</span><strong>{{ receipt.body.account }}</strong></div>
+      <div><span>Deal</span><strong class="mono">{{ receipt.body.deal_id }}</strong></div>
+      <div><span>Packet</span><strong class="mono">v{{ receipt.body.packet_version }}</strong></div>
+      <div><span>Policy</span><strong class="mono">{{ receipt.body.policy_id }}</strong></div>
+      <div><span>Issued</span><strong>{{ receipt.body.issued_at.date() }}</strong></div>
+      <div><span>Expires</span><strong>{{ receipt.body.expires_at.date() }}</strong></div>
+    </div>
+
+    <section class="voucher-section">
+      <h2>Approved commitments</h2>
+      <p class="voucher-lede">Only these statements may be represented to the customer.</p>
+      {% for item in receipt.body.commitments %}
+      <div class="voucher-commitment">
+        <div class="voucher-commitment-head">
+          <span class="mono">{{ item.claim_id }}</span>
+          <span class="badge {{ item.verdict|verdict_class }}">{{ item.verdict }}</span>
+        </div>
+        <p class="voucher-commitment-text">{{ item.commitment }}</p>
+        {% if item.conditions %}
+        <ul class="conditions compact">
+          {% for c in item.conditions %}<li>{{ c }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </section>
+
+    {% if receipt.body.declined %}
+    <section class="voucher-section">
+      <h2>Not committed</h2>
+      <p class="muted">These asks were assessed but receive no commitment.</p>
+      <div class="chips">{% for c in receipt.body.declined %}<span class="chip bad">{{ c }}</span>{% endfor %}</div>
+    </section>
+    {% endif %}
+
+    <section class="voucher-section">
+      <h2>Human approvals</h2>
+      <table class="table voucher-table">
+        <thead><tr><th>Claim</th><th>Role</th><th>Approver</th><th>Exact phrase</th><th>Bound</th></tr></thead>
+        <tbody>
+          {% for a in receipt.body.approvals %}
+          <tr>
+            <td class="mono">{{ a.claim_id }}</td>
+            <td>{{ a.role }}</td>
+            <td>{{ a.actor }}</td>
+            <td class="mono phrase">{{ a.phrase }}</td>
+            <td class="muted">{{ a.approved_at.date() }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <footer class="voucher-foot">
+      <div>
+        <span>Packet hash</span>
+        <code>{{ receipt.body.packet_hash }}</code>
+      </div>
+      <div>
+        <span>Body hash</span>
+        <code>{{ receipt.body_hash }}</code>
+      </div>
+      <div>
+        <span>Chain previous</span>
+        <code>{{ receipt.body.chain_prev or 'genesis for this account' }}</code>
+      </div>
+      <div>
+        <span>Issuer</span>
+        <strong>{{ receipt.body.issuer }}</strong>
+      </div>
+    </footer>
+  </article>
+
+  <aside class="receipt-rail">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Verification</h2>
+        <span class="badge {{ 'ok' if result.ok else 'bad' }}">{{ 'pass' if result.ok else 'fail' }}</span>
+      </div>
+      <p class="{{ 'ok' if result.ok else 'bad' }}">{{ result.summary }}</p>
+      <ul class="checks">
+        {% for check in result.checks %}
+        <li class="{{ 'ok' if check.ok else 'bad' }}">
+          <span class="check-dot"></span>
+          <span><strong>{{ check.code }}</strong><br>{{ check.detail }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <a class="button ghost wide" href="/api/receipts/{{ receipt.body.receipt_id }}" target="_blank" rel="noreferrer">Open signed JSON</a>
+    </section>
+
+    <section class="panel">
+      <h2>Why this is hard to fake</h2>
+      <ul class="plain-list">
+        <li>The signature covers the canonical JSON body, not a database flag.</li>
+        <li>Every approval phrase is bound to the packet hash in the body.</li>
+        <li>A revision to any commitment changes the hash and invalidates earlier approvals.</li>
+        <li>Verification recomputes the body hash and checks the embedded Ed25519 key.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Cryptographic material</h2>
+      <details>
+        <summary>Public key</summary>
+        <code class="break">{{ receipt.public_key }}</code>
+      </details>
+      <details>
+        <summary>Signature</summary>
+        <code class="break">{{ receipt.signature }}</code>
+      </details>
+      <p class="muted small">Algorithm: {{ receipt.algorithm }}</p>
+    </section>
+  </aside>
+</div>
+
+{% endblock %}

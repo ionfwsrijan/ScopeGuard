@@ -1,0 +1,49 @@
+# The deal record is deliberately boring: an account, a price basis, and the
+# promises an account executive wants to make. Everything else is derived.
+deal:
+  id: acme-2026
+  account: Acme Corp
+  requested_by: Priya
+  currency: USD
+  annual_list_price: 240000
+  cost_ratio_pct: 55
+  context: |
+    Acme is a 900-person logistics company. Their security team will not sign
+    without SSO, a 99.95% SLA, SOC 2 Type II, and a 20% first-year discount.
+    This is a competitive renewal against a incumbent with a lower list price.
+  tags: [renewal, enterprise, security-review]
+  claims:
+    - id: SSO
+      type: feature
+      title: SSO
+      requested_text: "SSO generally available by 2026-12-31."
+      requested_value:
+        kind: ga
+        ga_date: 2026-12-31
+      due: 2026-12-31
+      owner: Sam
+    - id: SLA
+      type: sla
+      title: 99.95% uptime SLA
+      requested_text: "99.95% monthly uptime SLA for the production API."
+      requested_value:
+        uptime_pct: 99.95
+      due: 2026-12-01
+      owner: Sam
+    - id: DISC
+      type: discount
+      title: 20% first-year discount
+      requested_text: "20% off the annual list price of 240,000 USD."
+      requested_value:
+        discount_pct: 20
+        annual_list_price: 240000
+      due: 2026-11-15
+      owner: Priya
+    - id: SOC2
+      type: security
+      title: SOC 2 Type II
+      requested_text: "SOC 2 Type II certified."
+      requested_value:
+        status: certified
+      due: 2026-12-01
+      owner: Alex

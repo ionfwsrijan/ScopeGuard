@@ -1,0 +1,86 @@
+room_id: room-demo
+messages:
+  - id: msg-001
+    room_id: room-demo
+    sender: u-priya
+    sender_name: Priya
+    body: "Customer is pushing hard on the 20% and the 99.95 SLA. I need an answer today."
+    timestamp_ms: 1793788800000
+  - id: msg-002
+    room_id: room-demo
+    sender: a-scout
+    sender_name: Scout
+    body: "I found four claims and four pieces of evidence. SSO is beta, not GA. The 90-day uptime is 99.92%."
+    timestamp_ms: 1793788860000
+  - id: msg-003
+    room_id: room-demo
+    sender: u-priya
+    sender_name: Priya
+    body: "APPROVE ACME-2026 DISC AS AE"
+    timestamp_ms: 1793788920000
+  - id: msg-004
+    room_id: room-demo
+    sender: u-maya
+    sender_name: Maya
+    body: "I can live with 20%. APPROVE ACME-2026 DISC AS VP_SALES"
+    timestamp_ms: 1793788980000
+  - id: msg-005
+    room_id: room-demo
+    sender: a-examiner
+    sender_name: Examiner
+    body: "BLOCK: discount_autonomy and margin_floor. v1 cannot be sealed."
+    timestamp_ms: 1793789040000
+  - id: msg-006
+    room_id: room-demo
+    sender: u-priya
+    sender_name: Priya
+    body: "Agreed. Re-approving on v2. APPROVE ACME-2026 DISC AS AE"
+    timestamp_ms: 1793789100000
+  - id: msg-007
+    room_id: room-demo
+    sender: u-maya
+    sender_name: Maya
+    body: "APPROVE ACME-2026 DISC AS VP_SALES"
+    timestamp_ms: 1793789160000
+  - id: msg-008
+    room_id: room-demo
+    sender: u-sam
+    sender_name: Sam
+    body: "APPROVE ACME-2026 SSO AS ENG_LEAD"
+    timestamp_ms: 1793789220000
+  - id: msg-009
+    room_id: room-demo
+    sender: u-sam
+    sender_name: Sam
+    body: "APPROVE ACME-2026 SLA AS ENG_LEAD"
+    timestamp_ms: 1793789280000
+  - id: msg-010
+    room_id: room-demo
+    sender: u-alex
+    sender_name: Alex
+    body: "APPROVE ACME-2026 SOC2 AS LEGAL"
+    timestamp_ms: 1793789340000
+  - id: msg-011
+    room_id: room-demo
+    sender: u-priya
+    sender_name: Priya
+    body: "APPROVE ACME-2026 SSO AS AE"
+    timestamp_ms: 1793789400000
+  - id: msg-012
+    room_id: room-demo
+    sender: u-priya
+    sender_name: Priya
+    body: "APPROVE ACME-2026 SLA AS AE"
+    timestamp_ms: 1793789460000
+  - id: msg-013
+    room_id: room-demo
+    sender: u-priya
+    sender_name: Priya
+    body: "APPROVE ACME-2026 SOC2 AS AE"
+    timestamp_ms: 1793789520000
+  - id: msg-014
+    room_id: room-demo
+    sender: u-maya
+    sender_name: Maya
+    body: "Nice work. Let's seal it."
+    timestamp_ms: 1793789580000
