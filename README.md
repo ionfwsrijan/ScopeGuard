@@ -17,8 +17,7 @@ promise that was never sealed.
   <img src="demo/images/01-room.png" alt="Vouch case dashboard with audit chain intact" width="100%">
 </p>
 
-> **Hackathon:** Flip the Switch · Nov 4–7, 2026 · tracks: Best Use of Switch,
-> Technical Execution, Creativity & Impact.
+> **Hackathon:** Flip the Switch · Nov 4–7, 2026 · **Track 01 — Best Business Workflow**.
 
 ---
 

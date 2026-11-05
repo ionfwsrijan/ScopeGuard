@@ -1,6 +1,6 @@
 # How I used Switch to stop sales promises from becoming surprises
 
-*Draft for the Flip the Switch blog / #HowISwitch side track.*
+*Draft for the Flip the Switch blog / #HowISwitch.*
 
 A few months ago I watched a deal almost die over one sentence.
 

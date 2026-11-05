@@ -132,13 +132,29 @@ Jinja2, Rich, pytest, ruff, mypy, Switch agent protocol and room templates.
 
 ## Track selection
 
-Primary: **Best Use of Switch**.
+**Track 01 — Best Business Workflow ($2,000).**
 
-Supporting: **Technical Execution** and **Creativity & Impact**.
+The track asks for a practical workflow that helps people and AI agents get work
+done, open to technical and nontechnical participants, with any combination of
+people, agents, and rooms. Vouch is exactly that:
 
-If a "trust and safety" or "agent collaboration" track exists, Vouch fits:
-independent challenge, exact consent, signed artifacts, and a human gate that
-does not depend on model behaviour.
+- **A real business workflow:** deal-desk underwriting for non-standard sales
+  terms, not a demo of an agent talking to itself.
+- **People and agents together:** five agents do evidence, assessment, challenge,
+  and procedure; four named humans make the commercial call.
+- **Technical and nontechnical roles:** engineers can inspect the deterministic
+  policy and receipt; sales, legal, and finance can work entirely in the room.
+- **Rooms are the product:** two linked rooms, an in-room approval grammar, and a
+  handoff that crosses the link only when the gate is clear.
+
+**Track 02** (personal or creative workflow) does not fit: this is revenue
+operations, not everyday life or creative work.
+
+**Track 03** (Best Core Contribution) is an optional second play. The Switch group
+template and integration notes could be offered upstream as an
+example/integration contribution, but the main submission is Track 01.
+
+The four judging criteria are mapped separately below; they are not tracks.
 
 ## Assets checklist
 
