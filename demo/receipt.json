@@ -1,118 +1,139 @@
 {
   "body": {
-    "receipt_id": "vch_072ab073fdc4bcab3a226d9a",
-    "deal_id": "acme-2026",
-    "account": "Acme Corp",
-    "packet_id": "acme-2026-v2",
+    "receipt_id": "co_5d7602a73cba86de6db28804",
+    "engagement_id": "northwind-2026",
+    "client": "Northwind Health",
+    "packet_id": "northwind-2026-v2",
     "packet_version": 2,
-    "packet_hash": "0f8fe1ab6a766d8aab34903cf880b5b9317030250193b7d68840b913baa87ab5",
-    "policy_id": "deal-policy-v1@v1",
+    "packet_hash": "2d3f89633746db1f342a976f75e5430ef0c9dce20b93c7ff9c3c02aeef6e85c9",
+    "policy_id": "scope-policy-v1@v1",
     "issued_at": "2026-11-04T09:00:00Z",
     "expires_at": "2026-12-04T09:00:00Z",
-    "commitments": [
+    "currency": "USD",
+    "line_items": [
       {
-        "claim_id": "SSO",
+        "request_id": "MOBILE",
+        "kind": "beta",
         "verdict": "narrow",
-        "commitment": "SSO: beta available by 2026-12-15; GA targeted Q1 2027, not committed.",
+        "scope": "Native mobile app by launch: beta by 2026-12-01; GA targeted Q1 2027, not included.",
+        "amount": 30000.0,
         "conditions": [
-          "Customer-facing language must say beta, not generally available.",
-          "No GA date commitment before Q1 2027."
+          "Scope is the beta build only; GA is a separate change order.",
+          "GA must not be represented as committed before Q1 2027.",
+          "App-store review time is excluded from the beta date."
         ]
       },
       {
-        "claim_id": "SLA",
+        "request_id": "RUSH",
+        "kind": "timeline",
         "verdict": "narrow",
-        "commitment": "99.90% monthly uptime SLA for the production API.",
+        "scope": "Two-week acceleration: acceleration of 1.0 week(s), not 2.0; rush premium included.",
+        "amount": 12000.0,
         "conditions": [
-          "Service credits follow the standard SLA schedule.",
-          "Planned maintenance windows are excluded from the measurement.",
-          "Uptime is measured monthly on the production API."
+          "Date guarantee excludes client-side delays and late content.",
+          "Capacity is reserved for the compressed window.",
+          "A daily standup and a named client decision-maker are required."
         ]
       },
       {
-        "claim_id": "DISC",
+        "request_id": "RATE",
+        "kind": "rate",
         "verdict": "narrow",
-        "commitment": "15.00% discount on the annual list price of 240,000 USD.",
+        "scope": "12.00% discount on this change order (5,760.00 USD off a 48,000.00 USD subtotal).",
+        "amount": -5760.0,
         "conditions": [
-          "Standard payment terms; no retroactive discount.",
-          "Quote valid for 30 days.",
-          "Discount capped at 15.00% without a documented CFO exception."
+          "Quote valid for 14 days.",
+          "Discount applies only to the line items in this change order.",
+          "No further discount without a written finance exception.",
+          "Discount capped at 12.00% without a written finance exception."
         ]
       },
       {
-        "claim_id": "SOC2",
+        "request_id": "TERMS",
+        "kind": "terms",
         "verdict": "narrow",
-        "commitment": "SOC 2 Type II: in progress; report expected 2027-01-15. Not certified.",
+        "scope": "Unlimited liability: mutual liability capped at 2x fees; unlimited liability is refused. Custom security addendum included.",
+        "amount": 6000.0,
         "conditions": [
-          "Do not describe Vouch as certified until the report is issued.",
-          "Update the commitment when the report date becomes final."
+          "Legal review is required before signature.",
+          "Liability is mutual and capped at the policy maximum.",
+          "The security addendum is limited to the scope in this change order."
         ]
       }
     ],
     "declined": [],
     "approvals": [
       {
-        "claim_id": "DISC",
-        "role": "AE",
-        "actor": "Priya",
-        "phrase": "APPROVE ACME-2026 DISC AS AE",
+        "request_id": "MOBILE",
+        "role": "ACCOUNT_LEAD",
+        "actor": "Dana",
+        "phrase": "SIGN NORTHWIND-2026 MOBILE AS ACCOUNT_LEAD",
         "approved_at": "2026-11-04T09:00:00Z"
       },
       {
-        "claim_id": "DISC",
-        "role": "VP_SALES",
-        "actor": "Maya",
-        "phrase": "APPROVE ACME-2026 DISC AS VP_SALES",
+        "request_id": "MOBILE",
+        "role": "DELIVERY_LEAD",
+        "actor": "Marco",
+        "phrase": "SIGN NORTHWIND-2026 MOBILE AS DELIVERY_LEAD",
         "approved_at": "2026-11-04T09:00:00Z"
       },
       {
-        "claim_id": "SLA",
-        "role": "AE",
-        "actor": "Priya",
-        "phrase": "APPROVE ACME-2026 SLA AS AE",
+        "request_id": "RATE",
+        "role": "ACCOUNT_LEAD",
+        "actor": "Dana",
+        "phrase": "SIGN NORTHWIND-2026 RATE AS ACCOUNT_LEAD",
         "approved_at": "2026-11-04T09:00:00Z"
       },
       {
-        "claim_id": "SLA",
-        "role": "ENG_LEAD",
-        "actor": "Sam",
-        "phrase": "APPROVE ACME-2026 SLA AS ENG_LEAD",
+        "request_id": "RATE",
+        "role": "FINANCE",
+        "actor": "Rae",
+        "phrase": "SIGN NORTHWIND-2026 RATE AS FINANCE",
         "approved_at": "2026-11-04T09:00:00Z"
       },
       {
-        "claim_id": "SOC2",
-        "role": "AE",
-        "actor": "Priya",
-        "phrase": "APPROVE ACME-2026 SOC2 AS AE",
+        "request_id": "RUSH",
+        "role": "ACCOUNT_LEAD",
+        "actor": "Dana",
+        "phrase": "SIGN NORTHWIND-2026 RUSH AS ACCOUNT_LEAD",
         "approved_at": "2026-11-04T09:00:00Z"
       },
       {
-        "claim_id": "SOC2",
+        "request_id": "RUSH",
+        "role": "DELIVERY_LEAD",
+        "actor": "Marco",
+        "phrase": "SIGN NORTHWIND-2026 RUSH AS DELIVERY_LEAD",
+        "approved_at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "request_id": "TERMS",
+        "role": "ACCOUNT_LEAD",
+        "actor": "Dana",
+        "phrase": "SIGN NORTHWIND-2026 TERMS AS ACCOUNT_LEAD",
+        "approved_at": "2026-11-04T09:00:00Z"
+      },
+      {
+        "request_id": "TERMS",
         "role": "LEGAL",
-        "actor": "Alex",
-        "phrase": "APPROVE ACME-2026 SOC2 AS LEGAL",
-        "approved_at": "2026-11-04T09:00:00Z"
-      },
-      {
-        "claim_id": "SSO",
-        "role": "AE",
-        "actor": "Priya",
-        "phrase": "APPROVE ACME-2026 SSO AS AE",
-        "approved_at": "2026-11-04T09:00:00Z"
-      },
-      {
-        "claim_id": "SSO",
-        "role": "ENG_LEAD",
-        "actor": "Sam",
-        "phrase": "APPROVE ACME-2026 SSO AS ENG_LEAD",
+        "actor": "Iris",
+        "phrase": "SIGN NORTHWIND-2026 TERMS AS LEGAL",
         "approved_at": "2026-11-04T09:00:00Z"
       }
     ],
+    "subtotal": 48000.0,
+    "discount_total": -5760.0,
+    "total": 42240.0,
     "chain_prev": null,
-    "issuer": "Vouch"
+    "issuer": "Scope Guard"
   },
-  "body_hash": "c283b784d7b12d0381edef7c7e9c0882a97958bd7403cdafa4146acea6e839f3",
-  "signature": "GJfgT6_p5gFRIlwEGRotQ53Y8C87fb7PndVRwwu1QUvmIpVCd0RyIEbxAfOx487iBomxfyxHygkaBbZxNVQcBQ==",
-  "public_key": "WsEfO5ReF9yeyOOiGGHxfaPKiubNqR3nPO0hEu1RnEg=",
-  "algorithm": "Ed25519"
+  "body_hash": "92670ee71a30115abcfd28b08d9029217e0f708d2f33017a04a68b8fe2593887",
+  "signature": "TKh3uKtemUVyM3lDArWaW6QlQk3FG-arRL4BItlrcPACFkgIoD_BoDqRP-ybW_X1Io4W4uAe17mUbrC59GA7Bw==",
+  "public_key": "OmKWvBDcafm-qKLpD9NzBfGl15PN39buIhx4UtCsKaM=",
+  "algorithm": "Ed25519",
+  "acceptance": {
+    "issuer": "Jordan Reyes",
+    "public_key": "GgX6CHMzN1CW-4qyXQR_X12cpvN806bB384SBUxrKM0=",
+    "signature": "eAccCXnxj4IkY32pJS9eXSk0t9Qvhc2AbrWkdRCd6cCMF1gRBsrCVaM2BpNoNn4sN7HgjTdn9GVisNmCkJ03Ag==",
+    "algorithm": "Ed25519"
+  }
 }

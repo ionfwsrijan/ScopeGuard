@@ -16,7 +16,7 @@ install:
 	$(BIN)/python -m pip install -e ".[dev]"
 
 demo:
-	$(BIN)/vouch demo --reset
+	$(BIN)/scopeguard demo --reset
 
 test:
 	$(BIN)/python -m pytest
@@ -33,10 +33,10 @@ typecheck:
 	$(BIN)/mypy
 
 serve:
-	$(BIN)/vouch --root . --home .vouch/demo serve --port 8787
+	$(BIN)/scopeguard --root . --home .scopeguard/demo serve --port 8787
 
 verify:
-	$(BIN)/vouch --root . --home .vouch/demo verify --receipt latest
+	$(BIN)/scopeguard --root . --home .scopeguard/demo verify --receipt latest
 
 clean:
 	$(BIN)/python -c "import shutil; [shutil.rmtree(p, ignore_errors=True) for p in ('.pytest_cache', '.ruff_cache', '.mypy_cache', 'htmlcov', 'build', 'dist')]"

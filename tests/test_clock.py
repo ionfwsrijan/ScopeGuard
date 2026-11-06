@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 
-from vouch.clock import as_date, iso, parse_moment, utcnow
+from scopeguard.clock import as_date, iso, parse_moment, utcnow
 
 
 def test_utcnow_is_aware_and_truncated() -> None:

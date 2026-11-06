@@ -1,0 +1,37 @@
+id: scope-policy-v1
+version: 1
+currency: USD
+max_evidence_age_days: 90
+
+rate:
+  # Headline ceiling. Above this the Pricer narrows the ask immediately.
+  max_pct: 20
+  # Above this the Pricer may quote, but the Red Team requires an explicit
+  # finance exception that this workflow does not have.
+  autonomy_pct: 12
+  # Gross margin floor on the change order. At a 58% delivery cost ratio,
+  # 20% off yields 27.50% margin and 12% off yields 34.09%.
+  margin_floor_pct: 30
+  quote_valid_days: 14
+
+timeline:
+  # The most the delivery team can compress without a new staffing plan.
+  max_weeks_saved: 1
+  rush_premium_pct: 25
+  min_confidence_pct: 80
+  require_capacity_evidence: true
+
+new_work:
+  allow_beta: true
+  allow_ga_estimate: true
+
+terms:
+  max_liability_multiple: 2
+  allow_unlimited_liability: false
+  require_legal_review: true
+
+approval_matrix:
+  new_work: [ACCOUNT_LEAD, DELIVERY_LEAD]
+  timeline: [ACCOUNT_LEAD, DELIVERY_LEAD]
+  rate: [ACCOUNT_LEAD, FINANCE]
+  terms: [ACCOUNT_LEAD, LEGAL]

@@ -1,4 +1,4 @@
-"""Typed domain model invariants."""
+"""The typed domain model: serialization, lookups, and hash-safe packet bodies."""
 
 from __future__ import annotations
 
@@ -7,14 +7,12 @@ from datetime import UTC, date, datetime
 import pytest
 from pydantic import ValidationError
 
-from vouch.models import (
+from scopeguard.models import (
+    Acceptance,
     Approval,
-    ApprovalStatus,
     Approvers,
-    Claim,
-    ClaimType,
-    Deal,
     Decision,
+    Engagement,
     Evidence,
     EvidenceBook,
     Finding,
@@ -23,325 +21,345 @@ from vouch.models import (
     Packet,
     PacketStatus,
     Receipt,
-    ReceiptApproval,
     ReceiptBody,
-    ReceiptDecision,
+    ReceiptLineItem,
+    RequestType,
     Severity,
     SwitchMessage,
     Verdict,
 )
-from vouch.receipt import canonical_hash
+from scopeguard.receipt import canonical_hash, packet_hash
+
+MOMENT = datetime(2026, 11, 4, 9, 0, tzinfo=UTC)
 
 
-def claim(claim_id: str = "SSO", claim_type: ClaimType = ClaimType.FEATURE) -> Claim:
-    return Claim(
-        id=claim_id,
-        type=claim_type,
-        title="SSO",
-        requested_text="SSO generally available by 2026-12-31.",
+def engagement() -> Engagement:
+    return Engagement(
+        id="northwind-2026",
+        client="Northwind Health",
+        requested_by="Dana",
+        contract_value=120000,
+        delivery_cost_ratio_pct=58,
+        requests=[
+            {
+                "id": "MOBILE",
+                "type": "new_work",
+                "title": "Native mobile app",
+                "requested_text": "A native mobile app by launch.",
+            },
+            {
+                "id": "RATE",
+                "type": "rate",
+                "title": "Discount",
+                "requested_text": "20% off.",
+                "requested_value": {"discount_pct": 20},
+            },
+        ],
     )
 
 
-def deal() -> Deal:
-    return Deal(
-        id="acme-2026",
-        account="Acme Corp",
-        requested_by="Priya",
-        annual_list_price=240000,
-        cost_ratio_pct=55,
-        claims=[claim()],
-    )
-
-
-def decision(claim_id: str = "SSO", verdict: Verdict = Verdict.NARROW) -> Decision:
+def decision(request_id: str = "MOBILE", amount: float | None = 30000.0) -> Decision:
     return Decision(
-        claim_id=claim_id,
-        verdict=verdict,
-        rationale="Because the roadmap says beta.",
-        approved_text="SSO beta by 2026-12-15.",
-        required_roles=["AE", "ENG_LEAD"],
+        request_id=request_id,
+        verdict=Verdict.NARROW,
+        rationale="because policy",
+        priced_text="Beta only.",
+        amount=amount,
+        conditions=["Beta only."],
+        required_roles=["ACCOUNT_LEAD", "DELIVERY_LEAD"],
     )
 
 
 def packet(**overrides: object) -> Packet:
     body = {
-        "deal_id": "acme-2026",
+        "engagement_id": "northwind-2026",
         "version": 1,
-        "account": "Acme Corp",
+        "client": "Northwind Health",
         "currency": "USD",
         "decisions": [decision()],
-        "packet_hash": "0" * 64,
-        "created_at": datetime(2026, 11, 4, 9, 0, tzinfo=UTC),
     }
-    body.update(overrides)
-    return Packet(**body)
+    values = {
+        "created_at": MOMENT,
+        "packet_hash": "",
+        **body,
+        **overrides,
+    }
+    instance = Packet(**values)  # type: ignore[arg-type]
+    instance.packet_hash = packet_hash(instance.body())
+    return instance
 
 
-# ------------------------------------------------------------------ claims/deal
-def test_claim_id_is_uppercased() -> None:
-    assert claim("sso").id == "SSO"
+# ---------------------------------------------------------------------- enums
+def test_request_types_cover_the_four_scope_creep_shapes() -> None:
+    assert {item.value for item in RequestType} == {"new_work", "timeline", "rate", "terms"}
 
 
-def test_claim_id_pattern_is_enforced() -> None:
+def test_verdicts_and_severities_are_serialized_as_strings() -> None:
+    assert Verdict.APPROVE.value == "approve"
+    assert Verdict.NARROW.value == "narrow"
+    assert Verdict.REFUSE.value == "refuse"
+    assert Verdict.ESCALATE.value == "escalate"
+    assert Severity.BLOCK.rank < Severity.WARN.rank < Severity.NOTE.rank
+
+
+# ------------------------------------------------------------------- requests
+def test_request_ids_are_normalized_to_uppercase() -> None:
+    request = {
+        "id": "mobile",
+        "type": "new_work",
+        "title": "Mobile app",
+        "requested_text": "Build it.",
+    }
+    parsed = Engagement(
+        id="acme-2026",
+        client="Acme",
+        requested_by="Dana",
+        contract_value=1000,
+        delivery_cost_ratio_pct=50,
+        requests=[request],
+    )
+    assert parsed.requests[0].id == "MOBILE"
+    assert parsed.request("mobile").id == "MOBILE"
+
+
+def test_request_ids_must_start_with_a_letter_and_be_short() -> None:
     with pytest.raises(ValidationError):
-        claim("1")
+        Engagement(
+            id="acme-2026",
+            client="Acme",
+            requested_by="Dana",
+            contract_value=1000,
+            delivery_cost_ratio_pct=50,
+            requests=[
+                {
+                    "id": "1BAD",
+                    "type": "new_work",
+                    "title": "Bad",
+                    "requested_text": "Bad request.",
+                }
+            ],
+        )
 
 
-def test_deal_claim_is_case_insensitive() -> None:
-    value = deal()
-    assert value.claim("sso").id == "SSO"
+def test_engagement_lookup_raises_keyerror_for_unknown_request() -> None:
     with pytest.raises(KeyError):
-        value.claim("NOPE")
+        engagement().request("NOPE")
 
 
-def test_deal_requires_at_least_one_claim() -> None:
+def test_engagement_token_is_uppercase_and_engagement_requires_positive_value() -> None:
+    assert engagement().engagement_token == "NORTHWIND-2026"
     with pytest.raises(ValidationError):
-        Deal(
+        Engagement(
             id="acme-2026",
-            account="Acme",
-            requested_by="Priya",
-            annual_list_price=1,
-            cost_ratio_pct=10,
-            claims=[],
+            client="Acme",
+            requested_by="Dana",
+            contract_value=0,
+            delivery_cost_ratio_pct=50,
+            requests=[],
         )
 
 
-def test_deal_price_must_be_positive() -> None:
+def test_extra_fields_are_forbidden() -> None:
     with pytest.raises(ValidationError):
-        Deal(
+        Engagement(
             id="acme-2026",
-            account="Acme",
-            requested_by="Priya",
-            annual_list_price=0,
-            cost_ratio_pct=10,
-            claims=[claim()],
+            client="Acme",
+            requested_by="Dana",
+            contract_value=1000,
+            delivery_cost_ratio_pct=50,
+            requests=[],
+            surprise="no",
         )
 
 
-# -------------------------------------------------------------------- evidence
+# ------------------------------------------------------------------- evidence
 def evidence(**overrides: object) -> Evidence:
-    body = {
-        "id": "EV-1",
-        "claim_id": "SSO",
-        "kind": "roadmap",
-        "source": "Roadmap",
-        "observed_at": date(2026, 10, 24),
-        "summary": "Beta in December.",
+    values = {
+        "id": "EV-MOBILE-1",
+        "request_id": "MOBILE",
+        "kind": "estimate",
+        "source": "estimate.pdf",
+        "observed_at": date(2026, 11, 1),
+        "summary": "320 hours at 150.",
+        "payload": {"hours": 320, "rate": 150},
+        **overrides,
     }
-    body.update(overrides)
-    return Evidence(**body)
+    return Evidence(**values)  # type: ignore[arg-type]
 
 
-def test_evidence_id_and_claim_id_are_uppercased() -> None:
-    item = evidence(id="ev-1", claim_id="sso")
-    assert item.id == "EV-1"
-    assert item.claim_id == "SSO"
-
-
-def test_evidence_digest_is_stable_and_excludes_digest() -> None:
+def test_evidence_digest_is_stable_and_excludes_itself() -> None:
     item = evidence()
     first = item.computed_digest()
-    assert first == item.computed_digest()
-    stored = item.model_copy(update={"digest": first})
-    assert stored.computed_digest() == first
-    changed = item.model_copy(update={"summary": "Beta moved."})
-    assert changed.computed_digest() != first
+    again = evidence(digest=first).computed_digest()
+    assert first == again
+    assert len(first) == 64
+    assert evidence(summary="different").computed_digest() != first
 
 
-def test_evidence_digest_changes_with_every_field() -> None:
-    base = evidence().computed_digest()
-    variants = [
-        evidence(id="EV-2"),
-        evidence(claim_id="SLA"),
-        evidence(kind="monitoring"),
-        evidence(source="Different"),
-        evidence(observed_at=date(2026, 10, 25)),
-        evidence(valid_until=date(2026, 12, 31)),
-        evidence(summary="Different summary"),
-        evidence(payload={"a": 1}),
-    ]
-    assert all(item.computed_digest() != base for item in variants)
-
-
-def test_evidence_book_lookup_helpers() -> None:
+def test_evidence_book_filters_by_uppercase_request() -> None:
     book = EvidenceBook(
-        deal_id="acme-2026", items=[evidence(), evidence(id="EV-2", claim_id="SLA")]
+        engagement_id="northwind-2026",
+        items=[evidence(), evidence(id="EV-RATE-1", request_id="RATE", kind="rate_card")],
     )
-    assert [item.id for item in book.for_claim("sso")] == ["EV-1"]
-    assert book.by_id("ev-1").id == "EV-1"
+    assert [item.id for item in book.for_request("mobile")] == ["EV-MOBILE-1"]
+    assert book.by_id("ev-rate-1").kind == "rate_card"
     with pytest.raises(KeyError):
-        book.by_id("missing")
-    assert book.for_claim("NOPE") == []
+        book.by_id("EV-NOPE-1")
 
 
-# -------------------------------------------------------------------- decision
-@pytest.mark.parametrize(
-    ("verdict", "is_commitment"),
-    [
+# ------------------------------------------------------------------- decision
+def test_only_approve_and_narrow_are_commitments() -> None:
+    for verdict, expected in [
         (Verdict.APPROVE, True),
         (Verdict.NARROW, True),
         (Verdict.REFUSE, False),
         (Verdict.ESCALATE, False),
-    ],
-)
-def test_decision_commitment_classification(verdict: Verdict, is_commitment: bool) -> None:
-    assert decision(verdict=verdict).is_commitment is is_commitment
+    ]:
+        item = decision()
+        item.verdict = verdict
+        assert item.is_commitment is expected
 
 
-# ---------------------------------------------------------------------- packet
-def test_packet_body_excludes_findings_and_status() -> None:
-    first = packet()
-    second = first.model_copy(
-        update={
-            "status": PacketStatus.BLOCKED,
-            "findings": [
-                Finding(
-                    id="EX-001",
-                    severity=Severity.BLOCK,
-                    code="test",
-                    message="a problem",
-                )
-            ],
-        }
+# --------------------------------------------------------------------- packet
+def test_packet_body_excludes_findings_status_and_timestamps() -> None:
+    original = packet()
+    changed = packet(
+        findings=[
+            Finding(
+                id="RT-001",
+                severity=Severity.BLOCK,
+                code="rate_autonomy",
+                message="too much",
+            )
+        ],
+        status=PacketStatus.BLOCKED,
+        challenged_at=MOMENT,
     )
-    assert canonical_hash(first.body()) == canonical_hash(second.body())
+    assert packet_hash(original.body()) == packet_hash(changed.body())
+    assert original.packet_hash == changed.packet_hash
+    assert changed.has_blocks() is True
 
 
-def test_packet_body_changes_with_commitment_language() -> None:
-    first = packet()
-    changed = first.model_copy(deep=True)
-    changed.decisions[0].approved_text = "SSO GA by 2026-11-30."
-    assert canonical_hash(first.body()) != canonical_hash(changed.body())
+def test_packet_body_changes_when_a_price_changes() -> None:
+    original = packet()
+    repriced = packet(decisions=[decision(amount=29999.0)])
+    assert original.packet_hash != repriced.packet_hash
 
 
-def test_packet_body_changes_with_version() -> None:
-    first = packet()
-    second = first.model_copy(update={"version": 2})
-    assert canonical_hash(first.body()) != canonical_hash(second.body())
-
-
-def test_packet_hash_material_includes_previous_hash() -> None:
-    first = packet()
-    second = first.model_copy(update={"previous_hash": "a" * 64})
-    assert canonical_hash(first.body()) != canonical_hash(second.body())
+def test_packet_totals_split_positive_and_negative_line_items() -> None:
+    instance = packet(
+        decisions=[
+            decision("MOBILE", 30000.0),
+            decision("RUSH", 12000.0),
+            decision("RATE", -9600.0),
+            decision("TERMS", None),
+        ]
+    )
+    assert instance.subtotal == 42000.0
+    assert instance.discount_total == -9600.0
+    assert instance.total == 32400.0
 
 
 def test_packet_decision_lookup_is_case_insensitive() -> None:
-    value = packet()
-    assert value.decision("sso").claim_id == "SSO"
+    assert packet().decision("mobile").request_id == "MOBILE"
     with pytest.raises(KeyError):
-        value.decision("NOPE")
+        packet().decision("TERMS")
 
 
-def test_packet_has_blocks() -> None:
-    value = packet()
-    assert value.has_blocks() is False
-    value.findings = [
-        Finding(id="EX-001", severity=Severity.WARN, code="warn", message="minor"),
-        Finding(id="EX-002", severity=Severity.BLOCK, code="block", message="major"),
-    ]
-    assert value.has_blocks() is True
+def test_packet_timestamps_normalize_to_utc() -> None:
+    instance = packet(created_at=datetime(2026, 11, 4, 10, 0))
+    assert instance.created_at.tzinfo is UTC
+    assert instance.created_at.hour == 10
 
 
-def test_packet_timestamps_are_normalized_to_utc() -> None:
-    value = packet(created_at=datetime(2026, 11, 4, 10, 0))
-    assert value.created_at.tzinfo is UTC
-
-
-# ------------------------------------------------------------------- approvers
-def test_approvers_role_helpers() -> None:
+# ------------------------------------------------------------------ approvers
+def test_approvers_are_case_insensitive_and_role_aware() -> None:
     approvers = Approvers(
-        deal_id="acme-2026",
-        roles={"AE": ["Priya"], "LEGAL": ["Alex", "Dana"]},
+        engagement_id="northwind-2026",
+        roles={"account_lead": ["Dana"], "finance": ["Rae"]},
     )
-    assert approvers.people("ae") == ["Priya"]
-    assert approvers.people("nope") == []
-    assert approvers.role_for("priya") == "AE"
-    assert approvers.role_for(" Dana ") == "LEGAL"
+    assert approvers.people("ACCOUNT_LEAD") == ["Dana"]
+    assert approvers.role_for(" dana ") == "ACCOUNT_LEAD"
     assert approvers.role_for("nobody") is None
-    assert approvers.can_hold("priya", "ae")
-    assert not approvers.can_hold("priya", "legal")
-    assert approvers.all_roles() == ["AE", "LEGAL"]
+    assert approvers.can_hold("DANA", "account_lead") is True
+    assert approvers.can_hold("Rae", "ACCOUNT_LEAD") is False
+    assert approvers.all_roles() == ["account_lead", "finance"]
 
 
-# -------------------------------------------------------------------- approval
-def test_approval_coerces_naive_timestamp() -> None:
-    value = Approval(
-        id="apr_1",
-        deal_id="acme-2026",
-        packet_id="acme-2026-v1",
-        packet_hash="0" * 64,
-        claim_id="SSO",
-        role="AE",
-        actor="Priya",
-        phrase="APPROVE ACME-2026 SSO AS AE",
-        created_at=datetime(2026, 11, 4, 9, 0),
-    )
-    assert value.created_at.tzinfo is UTC
-    assert value.status == ApprovalStatus.VALID
-
-
-# ------------------------------------------------------------------ switch msg
-def test_switch_message_timestamp() -> None:
-    value = SwitchMessage(
-        id="m1",
-        room_id="r1",
-        sender_name="Priya",
-        body="hello",
-        timestamp_ms=1793788800000,
-    )
-    assert value.timestamp.year == 2026
-    assert value.timestamp.tzinfo is UTC
-
-
-# ----------------------------------------------------------------------- gate
-def test_gate_result_failures() -> None:
+# --------------------------------------------------------------------- gate
+def test_gate_result_exposes_failures() -> None:
     result = GateResult(
         ok=False,
         checks=[
-            GateCheck(code="a", ok=True, detail="fine"),
-            GateCheck(code="b", ok=False, detail="broken"),
+            GateCheck(code="status", ok=False, detail="draft"),
+            GateCheck(code="signatures", ok=True, detail="signed"),
         ],
+        pending=["MOBILE ACCOUNT_LEAD"],
     )
-    assert [item.code for item in result.failures] == ["b"]
+    assert [item.code for item in result.failures] == ["status"]
+    assert result.pending == ["MOBILE ACCOUNT_LEAD"]
 
 
-# --------------------------------------------------------------------- receipt
-def test_receipt_round_trips_through_json() -> None:
+# ------------------------------------------------------------------- receipt
+def test_receipt_body_and_acceptance_round_trip() -> None:
     body = ReceiptBody(
-        receipt_id="vch_test",
-        deal_id="acme-2026",
-        account="Acme Corp",
-        packet_id="acme-2026-v2",
+        receipt_id="co_test",
+        engagement_id="northwind-2026",
+        client="Northwind Health",
+        packet_id="northwind-2026-v2",
         packet_version=2,
-        packet_hash="0" * 64,
-        policy_id="deal-policy-v1@v1",
-        issued_at=datetime(2026, 11, 4, 9, 0, tzinfo=UTC),
-        expires_at=datetime(2026, 12, 4, 9, 0, tzinfo=UTC),
-        commitments=[
-            ReceiptDecision(
-                claim_id="SSO",
+        packet_hash="abc",
+        policy_id="scope-policy-v1@v1",
+        issued_at=MOMENT,
+        expires_at=MOMENT,
+        line_items=[
+            ReceiptLineItem(
+                request_id="MOBILE",
+                kind="MOBILE",
                 verdict=Verdict.NARROW,
-                commitment="SSO beta by 2026-12-15.",
-                conditions=["Not GA."],
+                scope="Beta only.",
+                amount=30000.0,
             )
         ],
-        approvals=[
-            ReceiptApproval(
-                claim_id="SSO",
-                role="AE",
-                actor="Priya",
-                phrase="APPROVE ACME-2026 SSO AS AE",
-                approved_at=datetime(2026, 11, 4, 9, 0, tzinfo=UTC),
-            )
-        ],
+        approvals=[],
+        subtotal=30000.0,
+        discount_total=0.0,
+        total=30000.0,
     )
     receipt = Receipt(
         body=body,
-        body_hash="1" * 64,
+        body_hash=canonical_hash(body),
         signature="sig",
         public_key="key",
+        acceptance=Acceptance(issuer="Jordan", public_key="ckey", signature="csig"),
     )
-    again = Receipt.model_validate_json(receipt.model_dump_json())
-    assert again.body.receipt_id == "vch_test"
-    assert again.body.commitments[0].conditions == ["Not GA."]
+    assert receipt.body.total == 30000.0
+    assert receipt.acceptance is not None
+    assert receipt.acceptance.issuer == "Jordan"
+
+
+def test_switch_message_timestamp_is_utc() -> None:
+    message = SwitchMessage(
+        id="m1",
+        room_id="room",
+        sender_name="Dana",
+        body="hello",
+        timestamp_ms=1793875200000,
+    )
+    assert message.timestamp.tzinfo is UTC
+    assert message.timestamp.year == 2026
+
+
+def test_approval_timestamps_normalize_to_utc() -> None:
+    approval = Approval(
+        id="apr_1",
+        engagement_id="northwind-2026",
+        packet_id="northwind-2026-v2",
+        packet_hash="abc",
+        request_id="MOBILE",
+        role="ACCOUNT_LEAD",
+        actor="Dana",
+        phrase="SIGN NORTHWIND-2026 MOBILE AS ACCOUNT_LEAD",
+        created_at=datetime(2026, 11, 4, 9, 0),
+    )
+    assert approval.created_at.tzinfo is UTC

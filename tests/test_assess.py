@@ -1,4 +1,4 @@
-"""The Actuary: deterministic, evidence-bound decisions."""
+"""The Pricer: deterministic, evidence-bound decisions for four request types."""
 
 from __future__ import annotations
 
@@ -6,386 +6,552 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from vouch.assess import assess_deal
-from vouch.models import (
-    Claim,
-    ClaimType,
-    Deal,
+import pytest
+
+from scopeguard.assess import assess_engagement
+from scopeguard.models import (
+    Engagement,
     Evidence,
     EvidenceBook,
+    RequestType,
     Verdict,
 )
-from vouch.policy import Policy
+from scopeguard.policy import NewWorkRule, Policy, TimelineRule
 
 
 def policy(repo_root: Path) -> Policy:
-    return Policy.load(repo_root / "policies" / "deal_policy_v1.yaml")
+    return Policy.load(repo_root / "policies" / "scope_policy_v1.yaml")
 
 
-def claim(
-    claim_id: str,
-    claim_type: ClaimType,
+def request(
+    request_id: str,
+    request_type: str,
     requested: dict[str, Any] | None = None,
     *,
-    due: date | None = date(2026, 12, 31),
+    due: date | None = date(2026, 12, 15),
     title: str | None = None,
-) -> Claim:
-    return Claim(
-        id=claim_id,
-        type=claim_type,
-        title=title or claim_id,
-        requested_text=f"{claim_id} requested.",
-        requested_value=requested or {},
-        due=due,
-    )
+) -> dict[str, Any]:
+    return {
+        "id": request_id,
+        "type": request_type,
+        "title": title or request_id.title(),
+        "requested_text": f"{request_id} requested.",
+        "requested_value": requested or {},
+        "due": due,
+    }
 
 
 def evidence(
-    claim_id: str,
+    request_id: str,
     kind: str,
     payload: dict[str, Any],
     *,
-    observed_at: date = date(2026, 10, 24),
+    evidence_id: str | None = None,
+    observed_at: date = date(2026, 11, 1),
+    valid_until: date | None = None,
 ) -> Evidence:
     return Evidence(
-        id=f"EV-{claim_id}-1",
-        claim_id=claim_id,
+        id=evidence_id or f"EV-{request_id}-1",
+        request_id=request_id,
         kind=kind,
         source="test source",
         observed_at=observed_at,
+        valid_until=valid_until,
         summary="test evidence",
         payload=payload,
     )
 
 
 def run(
-    policy_value: Policy,
-    claims: list[Claim],
+    requests: list[dict[str, Any]],
     items: list[Evidence],
+    *,
+    policy_value: Policy,
+    cost_ratio: float = 58,
+    as_of: date = date(2026, 11, 4),
 ) -> dict[str, Any]:
-    deal = Deal(
-        id="acme-2026",
-        account="Acme Corp",
-        requested_by="Priya",
-        annual_list_price=240000,
-        cost_ratio_pct=55,
-        claims=claims,
+    engagement = Engagement(
+        id="test-2026",
+        client="Test Client",
+        requested_by="Dana",
+        contract_value=120000,
+        delivery_cost_ratio_pct=cost_ratio,
+        requests=requests,
     )
-    decisions = assess_deal(
-        deal=deal,
-        evidence=EvidenceBook(deal_id=deal.id, items=items),
+    decisions = assess_engagement(
+        engagement=engagement,
+        evidence=EvidenceBook(engagement_id=engagement.id, items=items),
         policy=policy_value,
+        as_of=as_of,
+    )
+    assert [item.request_id for item in decisions] == [item["id"] for item in requests]
+    return {item.request_id: item for item in decisions}
+
+
+# ------------------------------------------------------------------ new work
+def test_new_work_approves_when_the_estimate_supports_ga(repo_root: Path) -> None:
+    decisions = run(
+        [request("MOBILE", "new_work", {"ga_date": "2026-12-31"})],
+        [evidence("MOBILE", "estimate", {"hours": 320, "rate": 150, "ga_date": "2026-11-30"})],
+        policy_value=policy(repo_root),
+    )
+    decision = decisions["MOBILE"]
+    assert decision.verdict == Verdict.APPROVE
+    assert decision.amount == 48000.0
+    assert "2026-12-31" in decision.priced_text
+    assert decision.approved_value["kind"] == "ga"
+    assert decision.evidence_ids == ["EV-MOBILE-1"]
+
+
+def test_new_work_narrows_to_beta_when_ga_is_later(repo_root: Path) -> None:
+    decisions = run(
+        [request("MOBILE", "new_work", {"ga_date": "2026-12-15"})],
+        [
+            evidence(
+                "MOBILE",
+                "estimate",
+                {
+                    "hours": 320,
+                    "beta_hours": 200,
+                    "rate": 150,
+                    "beta_date": "2026-12-01",
+                    "ga_date": "2027-03-15",
+                    "ga_quarter": "Q1 2027",
+                },
+            )
+        ],
+        policy_value=policy(repo_root),
+    )
+    decision = decisions["MOBILE"]
+    assert decision.verdict == Verdict.NARROW
+    assert decision.amount == 30000.0
+    assert "beta by 2026-12-01" in decision.priced_text
+    assert "Q1 2027" in decision.priced_text
+    assert decision.approved_value["ga_committed"] is False
+    assert any("beta" in condition.casefold() for condition in decision.conditions)
+
+
+def test_new_work_derives_the_ga_quarter_when_payload_omits_it(repo_root: Path) -> None:
+    decisions = run(
+        [request("MOBILE", "new_work", {"ga_date": "2026-12-15"})],
+        [
+            evidence(
+                "MOBILE",
+                "estimate",
+                {
+                    "hours": 320,
+                    "beta_hours": 200,
+                    "rate": 150,
+                    "beta_date": "2026-12-01",
+                    "ga_date": "2027-02-15",
+                },
+            )
+        ],
+        policy_value=policy(repo_root),
+    )
+    assert "Q1 2027" in decisions["MOBILE"].priced_text
+
+
+def test_new_work_without_evidence_escalates_instead_of_inventing_a_price(repo_root: Path) -> None:
+    decision = run([request("MOBILE", "new_work")], [], policy_value=policy(repo_root))["MOBILE"]
+    assert decision.verdict == Verdict.ESCALATE
+    assert decision.amount is None
+    assert decision.is_commitment is False
+    assert decision.conditions
+
+
+def test_new_work_refuses_beta_when_policy_disables_it(repo_root: Path) -> None:
+    value = policy(repo_root).model_copy(
+        update={"new_work": NewWorkRule(allow_beta=False, allow_ga_estimate=True)}
+    )
+    decision = run(
+        [request("MOBILE", "new_work", {"ga_date": "2026-12-15"})],
+        [
+            evidence(
+                "MOBILE",
+                "estimate",
+                {"hours": 320, "rate": 150, "beta_date": "2026-12-01", "ga_date": "2027-03-15"},
+            )
+        ],
+        policy_value=value,
+    )["MOBILE"]
+    assert decision.verdict == Verdict.REFUSE
+    assert decision.amount is None
+
+
+def test_new_work_refuses_unsupported_dates_when_estimates_are_disabled(repo_root: Path) -> None:
+    value = policy(repo_root).model_copy(
+        update={"new_work": NewWorkRule(allow_beta=False, allow_ga_estimate=False)}
+    )
+    decision = run(
+        [request("MOBILE", "new_work", {"ga_date": "2026-12-15"})],
+        [evidence("MOBILE", "estimate", {"hours": 320, "rate": 150})],
+        policy_value=value,
+    )["MOBILE"]
+    assert decision.verdict == Verdict.REFUSE
+
+
+def test_new_work_escalates_when_no_date_is_supportable(repo_root: Path) -> None:
+    decision = run(
+        [request("MOBILE", "new_work", {"ga_date": "2026-11-01"})],
+        [
+            evidence(
+                "MOBILE",
+                "estimate",
+                {"hours": 320, "rate": 150, "beta_date": "2026-12-01", "ga_date": "2027-03-15"},
+            )
+        ],
+        policy_value=policy(repo_root),
+    )["MOBILE"]
+    assert decision.verdict == Verdict.ESCALATE
+    assert decision.amount is None
+
+
+def test_new_work_uses_the_latest_estimate(repo_root: Path) -> None:
+    decisions = run(
+        [request("MOBILE", "new_work", {"ga_date": "2026-12-31"})],
+        [
+            evidence(
+                "MOBILE",
+                "estimate",
+                {"hours": 100, "rate": 150, "ga_date": "2026-11-30"},
+                evidence_id="EV-OLD",
+                observed_at=date(2026, 10, 1),
+            ),
+            evidence(
+                "MOBILE",
+                "estimate",
+                {"hours": 200, "rate": 150, "ga_date": "2026-12-15"},
+                evidence_id="EV-NEW",
+                observed_at=date(2026, 11, 2),
+            ),
+        ],
+        policy_value=policy(repo_root),
+    )
+    assert decisions["MOBILE"].amount == 30000.0
+    assert decisions["MOBILE"].evidence_ids == ["EV-NEW"]
+
+
+# ------------------------------------------------------------------ timeline
+def test_timeline_approves_when_capacity_supports_the_request(repo_root: Path) -> None:
+    decision = run(
+        [request("RUSH", "timeline", {"weeks_saved": 1})],
+        [
+            evidence(
+                "RUSH",
+                "capacity",
+                {
+                    "rush_hours": 64,
+                    "rate": 150,
+                    "premium_pct": 25,
+                    "confidence_pct": 88,
+                    "supported_weeks": 1,
+                },
+            )
+        ],
+        policy_value=policy(repo_root),
+    )["RUSH"]
+    assert decision.verdict == Verdict.APPROVE
+    assert decision.amount == 12000.0
+    assert decision.approved_value["weeks_saved"] == 1
+
+
+def test_timeline_narrows_to_the_supported_weeks(repo_root: Path) -> None:
+    decision = run(
+        [request("RUSH", "timeline", {"weeks_saved": 2})],
+        [
+            evidence(
+                "RUSH",
+                "capacity",
+                {
+                    "rush_hours": 64,
+                    "rate": 150,
+                    "premium_pct": 25,
+                    "confidence_pct": 88,
+                    "supported_weeks": 1,
+                },
+            )
+        ],
+        policy_value=policy(repo_root),
+    )["RUSH"]
+    assert decision.verdict == Verdict.NARROW
+    assert decision.approved_value["weeks_saved"] == 1
+    assert decision.approved_value["requested_weeks"] == 2
+    assert "1.0 week(s)" in decision.priced_text
+
+
+def test_timeline_escalates_below_the_confidence_floor(repo_root: Path) -> None:
+    decision = run(
+        [request("RUSH", "timeline", {"weeks_saved": 1})],
+        [
+            evidence(
+                "RUSH",
+                "capacity",
+                {"rush_hours": 64, "rate": 150, "confidence_pct": 60, "supported_weeks": 1},
+            )
+        ],
+        policy_value=policy(repo_root),
+    )["RUSH"]
+    assert decision.verdict == Verdict.ESCALATE
+    assert decision.amount is None
+
+
+def test_timeline_refuses_when_no_weeks_are_compressible(repo_root: Path) -> None:
+    decision = run(
+        [request("RUSH", "timeline", {"weeks_saved": 1})],
+        [
+            evidence(
+                "RUSH",
+                "capacity",
+                {"rush_hours": 64, "rate": 150, "confidence_pct": 88, "supported_weeks": 0},
+            )
+        ],
+        policy_value=policy(repo_root),
+    )["RUSH"]
+    assert decision.verdict == Verdict.REFUSE
+
+
+def test_timeline_without_capacity_evidence_escalates(repo_root: Path) -> None:
+    decision = run([request("RUSH", "timeline")], [], policy_value=policy(repo_root))["RUSH"]
+    assert decision.verdict == Verdict.ESCALATE
+    assert decision.amount is None
+
+
+def test_timeline_uses_the_policy_premium_when_the_plan_omits_it(repo_root: Path) -> None:
+    decision = run(
+        [request("RUSH", "timeline", {"weeks_saved": 1})],
+        [
+            evidence(
+                "RUSH",
+                "capacity",
+                {"rush_hours": 64, "rate": 150, "confidence_pct": 88, "supported_weeks": 1},
+            )
+        ],
+        policy_value=policy(repo_root),
+    )["RUSH"]
+    assert decision.amount == 12000.0
+    assert decision.approved_value["premium_pct"] == 25
+
+
+def test_timeline_respects_the_policy_cap_even_when_capacity_is_available(repo_root: Path) -> None:
+    value = policy(repo_root).model_copy(
+        update={
+            "timeline": TimelineRule(
+                max_weeks_saved=1,
+                rush_premium_pct=25,
+                min_confidence_pct=80,
+                require_capacity_evidence=True,
+            )
+        }
+    )
+    decision = run(
+        [request("RUSH", "timeline", {"weeks_saved": 3})],
+        [
+            evidence(
+                "RUSH",
+                "capacity",
+                {"rush_hours": 64, "rate": 150, "confidence_pct": 95, "supported_weeks": 5},
+            )
+        ],
+        policy_value=value,
+    )["RUSH"]
+    assert decision.verdict == Verdict.NARROW
+    assert decision.approved_value["weeks_saved"] == 1
+
+
+# ---------------------------------------------------------------------- rate
+def test_rate_applies_the_requested_discount_against_positive_line_items(repo_root: Path) -> None:
+    decisions = run(
+        [
+            request("MOBILE", "new_work", {"ga_date": "2026-12-15"}),
+            request("RATE", "rate", {"discount_pct": 20}),
+        ],
+        [
+            evidence("MOBILE", "estimate", {"hours": 200, "rate": 150, "ga_date": "2026-11-30"}),
+            evidence("RATE", "rate_card", {"hourly_rate": 150}),
+        ],
+        policy_value=policy(repo_root),
+    )
+    rate = decisions["RATE"]
+    assert rate.verdict == Verdict.APPROVE
+    assert rate.amount == -6000.0
+    assert rate.approved_value["base_amount"] == 30000.0
+    assert rate.approved_value["margin_pct"] == 27.5
+
+
+def test_rate_narrows_above_the_headline_ceiling(repo_root: Path) -> None:
+    decisions = run(
+        [
+            request("MOBILE", "new_work", {"ga_date": "2026-12-15"}),
+            request("RATE", "rate", {"discount_pct": 25}),
+        ],
+        [
+            evidence("MOBILE", "estimate", {"hours": 200, "rate": 150, "ga_date": "2026-11-30"}),
+            evidence("RATE", "rate_card", {"hourly_rate": 150}),
+        ],
+        policy_value=policy(repo_root),
+    )
+    assert decisions["RATE"].verdict == Verdict.NARROW
+    assert decisions["RATE"].approved_value["discount_pct"] == 20
+    assert decisions["RATE"].amount == -6000.0
+
+
+def test_rate_without_a_rate_card_escalates(repo_root: Path) -> None:
+    decision = run(
+        [request("RATE", "rate", {"discount_pct": 20})],
+        [],
+        policy_value=policy(repo_root),
+    )["RATE"]
+    assert decision.verdict == Verdict.ESCALATE
+    assert decision.amount is None
+
+
+def test_rate_of_zero_is_a_no_op_discount(repo_root: Path) -> None:
+    decisions = run(
+        [
+            request("MOBILE", "new_work", {"ga_date": "2026-12-15"}),
+            request("RATE", "rate", {"discount_pct": 0}),
+        ],
+        [
+            evidence("MOBILE", "estimate", {"beta_hours": 200, "rate": 150}),
+            evidence("RATE", "rate_card", {"hourly_rate": 150}),
+        ],
+        policy_value=policy(repo_root),
+    )
+    assert decisions["RATE"].verdict == Verdict.APPROVE
+    assert decisions["RATE"].amount == 0.0
+
+
+# --------------------------------------------------------------------- terms
+def test_terms_refuses_unlimited_liability_and_caps_at_policy(repo_root: Path) -> None:
+    decision = run(
+        [request("TERMS", "terms", {"unlimited_liability": True})],
+        [evidence("TERMS", "contract", {"review_hours": 40, "rate": 150})],
+        policy_value=policy(repo_root),
+    )["TERMS"]
+    assert decision.verdict == Verdict.NARROW
+    assert decision.amount == 6000.0
+    assert decision.approved_value["liability_multiple"] == 2
+    assert decision.approved_value["unlimited_liability"] is False
+    assert "refused" in decision.priced_text
+    assert any("legal review" in condition.casefold() for condition in decision.conditions)
+
+
+def test_terms_narrows_a_multiple_above_the_policy_cap(repo_root: Path) -> None:
+    decision = run(
+        [request("TERMS", "terms", {"liability_multiple": 5})],
+        [evidence("TERMS", "contract", {"review_hours": 40, "rate": 150})],
+        policy_value=policy(repo_root),
+    )["TERMS"]
+    assert decision.verdict == Verdict.NARROW
+    assert decision.approved_value["liability_multiple"] == 2
+
+
+def test_terms_approves_a_request_inside_policy(repo_root: Path) -> None:
+    decision = run(
+        [request("TERMS", "terms", {"liability_multiple": 2})],
+        [evidence("TERMS", "contract", {"review_hours": 40, "rate": 150})],
+        policy_value=policy(repo_root),
+    )["TERMS"]
+    assert decision.verdict == Verdict.APPROVE
+    assert decision.amount == 6000.0
+
+
+def test_terms_without_contract_evidence_escalates(repo_root: Path) -> None:
+    decision = run(
+        [request("TERMS", "terms", {"unlimited_liability": True})],
+        [],
+        policy_value=policy(repo_root),
+    )["TERMS"]
+    assert decision.verdict == Verdict.ESCALATE
+    assert decision.amount is None
+
+
+# ----------------------------------------------------------------- aggregate
+def test_the_northwind_fixture_prices_v1_at_38400(repo_root: Path) -> None:
+    from scopeguard.fixtures import load_engagement, load_evidence
+
+    engagement = load_engagement(repo_root / "fixtures" / "northwind" / "engagement.yaml")
+    book = load_evidence(repo_root / "fixtures" / "northwind" / "evidence.yaml", engagement)
+    decisions = assess_engagement(
+        engagement=engagement,
+        evidence=book,
+        policy=policy(repo_root),
         as_of=date(2026, 11, 4),
     )
-    assert [item.claim_id for item in decisions] == [item.id for item in claims]
-    return {item.claim_id: item for item in decisions}
+    by_id = {item.request_id: item for item in decisions}
+    assert by_id["MOBILE"].verdict == Verdict.NARROW
+    assert by_id["MOBILE"].amount == 30000.0
+    assert by_id["RUSH"].verdict == Verdict.NARROW
+    assert by_id["RUSH"].amount == 12000.0
+    assert by_id["RATE"].verdict == Verdict.APPROVE
+    assert by_id["RATE"].amount == -9600.0
+    assert by_id["TERMS"].verdict == Verdict.NARROW
+    assert by_id["TERMS"].amount == 6000.0
+    subtotal = sum(item.amount or 0 for item in decisions if (item.amount or 0) > 0)
+    total = sum(item.amount or 0 for item in decisions)
+    assert subtotal == 48000.0
+    assert total == 38400.0
+    assert len(book.items) == 4
 
 
-# --------------------------------------------------------------------- feature
-def test_feature_approves_when_roadmap_meets_requested_ga(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SSO", ClaimType.FEATURE, {"ga_date": "2026-12-31"})],
-        [evidence("SSO", "roadmap", {"ga_date": "2026-11-30"})],
-    )["SSO"]
-    assert decision.verdict == Verdict.APPROVE
-    assert "2026-12-31" in decision.approved_text
-    assert decision.evidence_ids == ["EV-SSO-1"]
+def test_pricing_is_deterministic(repo_root: Path) -> None:
+    from scopeguard.fixtures import load_engagement, load_evidence
 
-
-def test_feature_narrows_to_beta_when_ga_is_later(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SSO", ClaimType.FEATURE, {"ga_date": "2026-12-31"}, title="SSO")],
-        [
-            evidence(
-                "SSO",
-                "roadmap",
-                {"beta_date": "2026-12-15", "ga_date": "2027-03-31", "ga_quarter": "Q1 2027"},
-            )
-        ],
-    )["SSO"]
-    assert decision.verdict == Verdict.NARROW
-    assert "beta available by 2026-12-15" in decision.approved_text
-    assert "Q1 2027" in decision.approved_text
-    assert decision.approved_value["ga_committed"] is False
-    assert any("beta" in item for item in decision.conditions)
-
-
-def test_feature_derives_quarter_when_payload_omits_it(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SSO", ClaimType.FEATURE, {"ga_date": "2026-12-31"})],
-        [evidence("SSO", "roadmap", {"beta_date": "2026-12-15", "ga_date": "2027-02-15"})],
-    )["SSO"]
-    assert decision.approved_value["ga_quarter"] == "Q1 2027"
-
-
-def test_feature_refuses_beta_when_policy_disallows_it(repo_root: Path) -> None:
-    base = policy(repo_root)
-    modified = base.model_copy(
-        update={"feature": base.feature.model_copy(update={"allow_beta": False})}
-    )
-    decision = run(
-        modified,
-        [claim("SSO", ClaimType.FEATURE, {"ga_date": "2026-12-31"})],
-        [evidence("SSO", "roadmap", {"beta_date": "2026-12-15", "ga_date": "2027-03-31"})],
-    )["SSO"]
-    assert decision.verdict == Verdict.REFUSE
-    assert any("allow_beta=false" in ref for ref in decision.policy_refs)
-
-
-def test_feature_escalates_when_no_date_is_supportable(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SSO", ClaimType.FEATURE, {"ga_date": "2026-12-31"})],
-        [evidence("SSO", "roadmap", {})],
-    )["SSO"]
-    assert decision.verdict == Verdict.ESCALATE
-    assert "product-owned target" in decision.approved_text.lower()
-
-
-def test_feature_refuses_unsupportable_roadmap_when_disabled(repo_root: Path) -> None:
-    base = policy(repo_root)
-    modified = base.model_copy(
-        update={"feature": base.feature.model_copy(update={"allow_roadmap": False})}
-    )
-    decision = run(
-        modified,
-        [claim("SSO", ClaimType.FEATURE, {"ga_date": "2026-12-31"})],
-        [evidence("SSO", "roadmap", {})],
-    )["SSO"]
-    assert decision.verdict == Verdict.REFUSE
-
-
-def test_feature_without_evidence_escalates(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SSO", ClaimType.FEATURE)],
-        [],
-    )["SSO"]
-    assert decision.verdict == Verdict.ESCALATE
-    assert decision.evidence_ids == []
-    assert decision.required_roles == []
-
-
-def test_feature_uses_the_latest_roadmap(repo_root: Path) -> None:
-    older = evidence("SSO", "roadmap", {"ga_date": "2027-06-30"}, observed_at=date(2026, 9, 1))
-    older = older.model_copy(update={"id": "EV-SSO-OLD"})
-    newer = evidence("SSO", "roadmap", {"ga_date": "2026-11-30"}, observed_at=date(2026, 10, 24))
-    decision = run(
-        policy(repo_root),
-        [claim("SSO", ClaimType.FEATURE, {"ga_date": "2026-12-31"})],
-        [older, newer],
-    )["SSO"]
-    assert decision.verdict == Verdict.APPROVE
-    assert decision.evidence_ids == ["EV-SSO-1"]
-
-
-# ------------------------------------------------------------------------- SLA
-def test_sla_approves_a_supportable_request(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SLA", ClaimType.SLA, {"uptime_pct": 99.90})],
-        [evidence("SLA", "monitoring", {"uptime_pct": 99.95})],
-    )["SLA"]
-    assert decision.verdict == Verdict.APPROVE
-    assert "99.90%" in decision.approved_text
-    assert decision.evidence_ids == ["EV-SLA-1"]
-
-
-def test_sla_narrows_to_the_standard(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SLA", ClaimType.SLA, {"uptime_pct": 99.95})],
-        [evidence("SLA", "monitoring", {"uptime_pct": 99.92})],
-    )["SLA"]
-    assert decision.verdict == Verdict.NARROW
-    assert "99.90%" in decision.approved_text
-    assert decision.approved_value["requested_pct"] == 99.95
-    assert any("credits" in item for item in decision.conditions)
-    assert any("maintenance" in item for item in decision.conditions)
-
-
-def test_sla_escalates_below_observed_floor(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SLA", ClaimType.SLA, {"uptime_pct": 99.9})],
-        [evidence("SLA", "monitoring", {"uptime_pct": 99.8})],
-    )["SLA"]
-    assert decision.verdict == Verdict.ESCALATE
-    assert "below the policy floor" in decision.rationale
-
-
-def test_sla_uses_policy_standard_when_request_omits_value(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SLA", ClaimType.SLA, {})],
-        [evidence("SLA", "monitoring", {"uptime_pct": 99.99})],
-    )["SLA"]
-    assert decision.verdict == Verdict.APPROVE
-    assert "99.90%" in decision.approved_text
-
-
-def test_sla_without_evidence_escalates(repo_root: Path) -> None:
-    decision = run(policy(repo_root), [claim("SLA", ClaimType.SLA)], [])["SLA"]
-    assert decision.verdict == Verdict.ESCALATE
-
-
-# -------------------------------------------------------------------- discount
-def test_discount_approves_inside_the_ceiling(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("DISC", ClaimType.DISCOUNT, {"discount_pct": 20, "annual_list_price": 240000})],
-        [evidence("DISC", "pricing", {"annual_list_price": 240000})],
-    )["DISC"]
-    assert decision.verdict == Verdict.APPROVE
-    assert "20.00%" in decision.approved_text
-    assert decision.approved_value["discount_pct"] == 20
-    assert decision.approved_value["net_price_pct"] == 80.0
-    assert decision.evidence_ids == ["EV-DISC-1"]
-
-
-def test_discount_narrows_above_the_ceiling(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("DISC", ClaimType.DISCOUNT, {"discount_pct": 25, "annual_list_price": 240000})],
-        [evidence("DISC", "pricing", {"annual_list_price": 240000})],
-    )["DISC"]
-    assert decision.verdict == Verdict.NARROW
-    assert "20.00%" in decision.approved_text
-    assert "policy.discount.over_cap" in decision.policy_refs
-
-
-def test_discount_without_evidence_escalates(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("DISC", ClaimType.DISCOUNT, {"discount_pct": 20})],
-        [],
-    )["DISC"]
-    assert decision.verdict == Verdict.ESCALATE
-
-
-def test_zero_discount_needs_no_pricing_evidence(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("DISC", ClaimType.DISCOUNT, {"discount_pct": 0, "annual_list_price": 240000})],
-        [],
-    )["DISC"]
-    assert decision.verdict == Verdict.APPROVE
-    assert decision.evidence_ids == []
-
-
-def test_discount_conditions_are_always_present(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("DISC", ClaimType.DISCOUNT, {"discount_pct": 10, "annual_list_price": 240000})],
-        [evidence("DISC", "pricing", {})],
-    )["DISC"]
-    assert "Quote valid for 30 days." in decision.conditions
-
-
-# -------------------------------------------------------------------- security
-def test_security_approves_certification(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SOC2", ClaimType.SECURITY, {"status": "certified"})],
-        [evidence("SOC2", "security_report", {"status": "certified", "report_date": "2026-10-01"})],
-    )["SOC2"]
-    assert decision.verdict == Verdict.APPROVE
-    assert "SOC2 requested." in decision.approved_text
-
-
-def test_security_narrows_to_in_progress(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SOC2", ClaimType.SECURITY, {"status": "certified"}, title="SOC 2 Type II")],
-        [
-            evidence(
-                "SOC2",
-                "security_report",
-                {"status": "in_progress", "report_date": "2027-01-15"},
-            )
-        ],
-    )["SOC2"]
-    assert decision.verdict == Verdict.NARROW
-    assert "in progress" in decision.approved_text
-    assert "2027-01-15" in decision.approved_text
-    assert "Not certified." in decision.approved_text
-    assert any("Do not describe" in item for item in decision.conditions)
-
-
-def test_security_escalates_when_in_progress_has_no_report_date(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SOC2", ClaimType.SECURITY, {"status": "certified"})],
-        [evidence("SOC2", "security_report", {"status": "in_progress"})],
-    )["SOC2"]
-    assert decision.verdict == Verdict.ESCALATE
-    assert "report date" in decision.rationale.lower()
-
-
-def test_security_rejects_unknown_status(repo_root: Path) -> None:
-    decision = run(
-        policy(repo_root),
-        [claim("SOC2", ClaimType.SECURITY, {"status": "certified"})],
-        [evidence("SOC2", "security_report", {"status": "self-attested"})],
-    )["SOC2"]
-    assert decision.verdict == Verdict.ESCALATE
-    assert "not an admissible security posture" in decision.rationale
-
-
-def test_security_without_evidence_escalates(repo_root: Path) -> None:
-    decision = run(policy(repo_root), [claim("SOC2", ClaimType.SECURITY)], [])["SOC2"]
-    assert decision.verdict == Verdict.ESCALATE
-
-
-# --------------------------------------------------------------------- general
-def test_assessment_is_deterministic(repo_root: Path) -> None:
-    claims = [
-        claim("SSO", ClaimType.FEATURE, {"ga_date": "2026-12-31"}),
-        claim("SLA", ClaimType.SLA, {"uptime_pct": 99.95}),
-        claim("DISC", ClaimType.DISCOUNT, {"discount_pct": 20, "annual_list_price": 240000}),
-        claim("SOC2", ClaimType.SECURITY, {"status": "certified"}),
+    engagement = load_engagement(repo_root / "fixtures" / "northwind" / "engagement.yaml")
+    book = load_evidence(repo_root / "fixtures" / "northwind" / "evidence.yaml", engagement)
+    value = policy(repo_root)
+    first = assess_engagement(engagement=engagement, evidence=book, policy=value)
+    second = assess_engagement(engagement=engagement, evidence=book, policy=value)
+    assert [item.model_dump(mode="json") for item in first] == [
+        item.model_dump(mode="json") for item in second
     ]
-    items = [
-        evidence("SSO", "roadmap", {"beta_date": "2026-12-15", "ga_date": "2027-03-31"}),
-        evidence("SLA", "monitoring", {"uptime_pct": 99.92}),
-        evidence("DISC", "pricing", {"annual_list_price": 240000}),
-        evidence("SOC2", "security_report", {"status": "in_progress", "report_date": "2027-01-15"}),
-    ]
-    first = run(policy(repo_root), claims, items)
-    second = run(policy(repo_root), claims, items)
-    assert {key: value.model_dump() for key, value in first.items()} == {
-        key: value.model_dump() for key, value in second.items()
-    }
 
 
-def test_policy_roles_are_attached_to_every_assessed_claim(repo_root: Path) -> None:
+def test_rate_is_computed_after_all_positive_line_items_even_if_declared_first(
+    repo_root: Path,
+) -> None:
     decisions = run(
-        policy(repo_root),
         [
-            claim("SSO", ClaimType.FEATURE),
-            claim("DISC", ClaimType.DISCOUNT),
+            request("RATE", "rate", {"discount_pct": 10}),
+            request("TERMS", "terms", {"liability_multiple": 1}),
         ],
-        [],
+        [
+            evidence("RATE", "rate_card", {"hourly_rate": 150}),
+            evidence("TERMS", "contract", {"review_hours": 40, "rate": 150}),
+        ],
+        policy_value=policy(repo_root),
     )
-    assert decisions["SSO"].required_roles == []
-    assert decisions["DISC"].required_roles == ["AE", "VP_SALES"]
+    assert decisions["RATE"].approved_value["base_amount"] == 6000.0
+    assert decisions["RATE"].amount == -600.0
 
 
-def test_repository_fixture_matches_the_demo_story(repo_root: Path) -> None:
-    from vouch.fixtures import load_deal, load_evidence
+@pytest.mark.parametrize(
+    ("cost_ratio", "discount", "margin"),
+    [(58, 12, 34.09), (58, 20, 27.5), (40, 20, 50.0)],
+)
+def test_rate_margin_is_computed_from_the_engagement_cost_ratio(
+    repo_root: Path, cost_ratio: float, discount: float, margin: float
+) -> None:
+    decisions = run(
+        [
+            request("MOBILE", "new_work", {"ga_date": "2026-12-15"}),
+            request("RATE", "rate", {"discount_pct": discount}),
+        ],
+        [
+            evidence("MOBILE", "estimate", {"beta_hours": 200, "rate": 150}),
+            evidence("RATE", "rate_card", {"hourly_rate": 150}),
+        ],
+        policy_value=policy(repo_root),
+        cost_ratio=cost_ratio,
+    )
+    assert decisions["RATE"].approved_value["margin_pct"] == margin
 
-    deal = load_deal(repo_root / "fixtures" / "acme" / "request.yaml")
-    book = load_evidence(repo_root / "fixtures" / "acme" / "evidence.yaml", deal)
-    decisions = {
-        item.claim_id: item
-        for item in assess_deal(
-            deal=deal, evidence=book, policy=policy(repo_root), as_of=date(2026, 11, 4)
-        )
-    }
-    assert decisions["SSO"].verdict == Verdict.NARROW
-    assert decisions["SLA"].verdict == Verdict.NARROW
-    assert decisions["DISC"].verdict == Verdict.APPROVE
-    assert decisions["SOC2"].verdict == Verdict.NARROW
+
+def test_new_work_type_enum_is_accepted_from_the_model(repo_root: Path) -> None:
+    decision = run(
+        [request("MOBILE", RequestType.NEW_WORK.value, {"ga_date": "2026-12-31"})],
+        [evidence("MOBILE", "estimate", {"hours": 100, "rate": 150, "ga_date": "2026-12-01"})],
+        policy_value=policy(repo_root),
+    )["MOBILE"]
+    assert decision.verdict == Verdict.APPROVE

@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}{{ case.engagement.client }} - Scope Guard{% endblock %}
+{% block content %}
+
+<nav class="crumbs"><a href="/">Ledger</a><span>/</span><span>{{ case.engagement.id }}</span></nav>
+
+<section class="deal-head">
+  <div>
+    <p class="eyebrow">Change-order room</p>
+    <h1>{{ case.engagement.client }}</h1>
+    <p class="mono muted">{{ case.engagement.id }} · requested by {{ case.engagement.requested_by }} · {{ case.engagement.currency }} {{ case.engagement.contract_value|money }} fixed fee</p>
+  </div>
+  <div class="deal-status">
+    {% if case.receipt %}
+      <span class="badge ok big">{{ 'countersigned' if case.receipt.acceptance else 'sealed' }}</span>
+      <a class="mono" href="/change-orders/{{ case.receipt.body.receipt_id }}">{{ case.receipt.body.receipt_id }}</a>
+    {% elif case.packet %}
+      <span class="badge {{ 'bad' if case.packet.status == 'blocked' else 'warn' }} big">{{ case.packet.status }}</span>
+      <span class="mono muted">v{{ case.packet.version }} · {{ case.packet.packet_hash|short(16) }}…</span>
+    {% endif %}
+  </div>
+</section>
+
+<div class="deal-layout">
+  <div class="deal-main">
+
+    {% if case.packet %}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Priced packet v{{ case.packet.version }}</h2>
+        <span class="mono muted">{{ case.packet.packet_hash[:32] }}…</span>
+      </div>
+      <div class="decision-list">
+        {% for d in case.packet.decisions %}
+        <article class="decision {{ d.verdict|verdict_class }}">
+          <div class="decision-head">
+            <span class="claim-id mono">{{ d.request_id }}</span>
+            <span class="verdict {{ d.verdict|verdict_class }}">{{ d.verdict }}</span>
+            <span class="decision-roles">needs {{ d.required_roles|join(' + ') }}</span>
+            {% if d.amount is not none %}
+            <span class="decision-amount mono {{ 'ok' if d.amount >= 0 else 'warn' }}">{{ d.amount|signed }} {{ case.engagement.currency }}</span>
+            {% endif %}
+          </div>
+          <p class="commitment">{{ d.priced_text }}</p>
+          {% if d.conditions %}
+          <ul class="conditions">
+            {% for c in d.conditions %}<li>{{ c }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+          <p class="rationale">{{ d.rationale }}</p>
+          <div class="decision-foot">
+            <span class="mono muted">{{ d.policy_refs|join(' · ') }}</span>
+            <span class="mono muted">{{ d.evidence_ids|join(' · ') }}</span>
+          </div>
+          <div class="decision-approvals">
+            {% for a in case.valid_approvals if a.request_id == d.request_id %}
+              <span class="sig">{{ a.role }} · {{ a.actor }}</span>
+            {% else %}
+              <span class="sig missing">awaiting {{ d.required_roles|join(', ') }}</span>
+            {% endfor %}
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      <div class="packet-total">
+        <span>Subtotal <strong>{{ case.packet.subtotal|money }}</strong></span>
+        <span>Discount <strong>{{ case.packet.discount_total|money }}</strong></span>
+        <span class="total">Total <strong>{{ case.packet.total|money }} {{ case.packet.currency }}</strong></span>
+      </div>
+    </section>
+
+    {% if case.packet.findings %}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Red Team findings</h2>
+        <span class="muted">{{ case.blocks|length }} blocking</span>
+      </div>
+      <div class="findings">
+        {% for f in case.packet.findings %}
+        <div class="finding {{ f.severity|severity_class }}">
+          <span class="severity">{{ f.severity }}</span>
+          <div>
+            <p><strong class="mono">{{ f.code }}</strong> · {{ f.request_id or 'packet' }}</p>
+            <p>{{ f.message }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% else %}
+    <section class="empty">
+      <h3>No priced packet yet.</h3>
+      <p>Evidence is ingested. Run <code>scopeguard assess --engagement {{ case.engagement.id }}</code> to price the asks.</p>
+    </section>
+    {% endif %}
+
+    {% if case.approvals %}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Signature record</h2>
+        <span class="muted">{{ case.valid_approvals|length }} valid · {{ case.stale_approvals|length }} stale</span>
+      </div>
+      <table class="table">
+        <thead><tr><th>Request</th><th>Role</th><th>Actor</th><th>Phrase</th><th>Status</th><th>Bound hash</th></tr></thead>
+        <tbody>
+          {% for a in case.approvals %}
+          <tr class="{{ 'is-stale' if a.status == 'stale' else '' }}">
+            <td class="mono">{{ a.request_id }}</td>
+            <td>{{ a.role }}</td>
+            <td>{{ a.actor }}</td>
+            <td class="mono phrase">{{ a.phrase }}</td>
+            <td><span class="badge {{ 'ok' if a.status == 'valid' else 'muted' }}">{{ a.status }}</span></td>
+            <td class="mono muted">{{ a.packet_hash|short(12) }}…</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if case.stale_approvals %}
+      <p class="note warn">Stale signatures are kept as an audit record. They never count toward the current packet.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if handoff %}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Delivery handoff</h2>
+        <span class="badge {{ 'ok' if case.receipt.acceptance else 'warn' }}">{{ 'two-party signed' if case.receipt.acceptance else 'awaiting client' }}</span>
+      </div>
+      <pre class="handoff">{{ handoff }}</pre>
+    </section>
+    {% endif %}
+
+  </div>
+
+  <aside class="deal-rail">
+    <section class="panel gate-panel">
+      <h2>Human gate</h2>
+      {% if case.gate %}
+        <p class="gate-state {{ 'ok' if case.gate.ok else 'warn' }}">
+          {{ 'Clear to seal' if case.gate.ok else 'Not clear' }}
+        </p>
+        <ul class="checks">
+          {% for check in case.gate.checks %}
+          <li class="{{ 'ok' if check.ok else 'bad' }}">
+            <span class="check-dot"></span>
+            <span><strong>{{ check.code }}</strong><br>{{ check.detail }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% if case.pending %}
+        <div class="pending">
+          <p class="muted">Pending signatures</p>
+          {% for p in case.pending %}<span class="chip warn">{{ p }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      {% else %}
+        <p class="muted">No packet to gate yet.</p>
+      {% endif %}
+    </section>
+
+    {% if case.receipt %}
+    <section class="panel">
+      <h2>Change order</h2>
+      <a class="receipt-button" href="/change-orders/{{ case.receipt.body.receipt_id }}">
+        <span class="mono">{{ case.receipt.body.receipt_id }}</span>
+        <span class="ok">{{ 'Verified' if case.verification and case.verification.ok else 'Check failed' }} →</span>
+      </a>
+      <p class="muted small">Total {{ case.receipt.body.total|money }} {{ case.receipt.body.currency }} · issued {{ case.receipt.body.issued_at.date() }} · expires {{ case.receipt.body.expires_at.date() }}</p>
+      <p class="muted small">
+        {% if case.receipt.acceptance %}
+          Countersigned by <strong>{{ case.receipt.acceptance.issuer }}</strong>
+        {% else %}
+          Awaiting client countersignature
+        {% endif %}
+      </p>
+      <p class="muted small">Body hash <span class="mono">{{ case.receipt.body_hash|short(18) }}…</span></p>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <h2>Engagement facts</h2>
+      <dl class="facts">
+        <dt>Requests</dt><dd>{{ case.engagement.requests|length }}</dd>
+        <dt>Evidence</dt><dd>{{ case.evidence_count }}</dd>
+        <dt>Packets</dt><dd>{{ case.packet_count }}</dd>
+        <dt>Delivery cost ratio</dt><dd>{{ case.engagement.delivery_cost_ratio_pct }}%</dd>
+        <dt>Contract value</dt><dd>{{ case.engagement.currency }} {{ case.engagement.contract_value|money }}</dd>
+      </dl>
+      <p class="muted small">{{ case.engagement.context }}</p>
+    </section>
+
+    <section class="panel">
+      <h2>Audit tail</h2>
+      <ol class="audit">
+        {% for event in audit %}
+        <li>
+          <span class="mono">{{ event.kind }}</span>
+          <span class="muted">{{ event.actor }} · {{ event.at[11:19] }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+  </aside>
+</div>
+
+{% endblock %}

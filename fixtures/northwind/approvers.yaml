@@ -1,0 +1,9 @@
+# Who may hold each signature role. These names are matched to the sender name
+# of a Switch message. A Switch room role is not a signature; a named person
+# holding the role, saying the exact phrase, bound to a packet hash, is.
+engagement_id: northwind-2026
+roles:
+  ACCOUNT_LEAD: [Dana]
+  DELIVERY_LEAD: [Marco]
+  FINANCE: [Rae]
+  LEGAL: [Iris]

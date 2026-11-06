@@ -1,0 +1,50 @@
+# A fixed-fee services engagement. The contract is signed; the margin is thin.
+# Everything else in this repository is derived from this record and the
+# evidence attached to each request.
+engagement:
+  id: northwind-2026
+  client: Northwind Health
+  requested_by: Dana
+  currency: USD
+  contract_value: 120000
+  delivery_cost_ratio_pct: 58
+  context: |
+    Northwind Health signed a fixed-fee $120,000 contract for a patient
+    onboarding portal. Launch is 2026-12-15. Two weeks before launch, the
+    client's program director sends four "small" additions in one message.
+    The agency's margin on the base contract is already thin.
+  tags: [fixed-fee, healthcare, launch]
+  requests:
+    - id: MOBILE
+      type: new_work
+      title: Native mobile app by launch
+      requested_text: "A native iOS and Android app, generally available on 2026-12-15."
+      requested_value:
+        ga_date: 2026-12-15
+      due: 2026-12-15
+      owner: Marco
+    - id: RUSH
+      type: timeline
+      title: Two-week acceleration
+      requested_text: "Pull the entire launch forward by two weeks, guaranteed."
+      requested_value:
+        weeks_saved: 2
+      due: 2026-12-01
+      owner: Marco
+    - id: RATE
+      type: rate
+      title: 20% off the change order
+      requested_text: "Take 20% off the change order; we are a great logo."
+      requested_value:
+        discount_pct: 20
+      due: 2026-11-15
+      owner: Dana
+    - id: TERMS
+      type: terms
+      title: Unlimited liability
+      requested_text: "Accept unlimited liability and our custom security addendum."
+      requested_value:
+        unlimited_liability: true
+        custom_security_addendum: true
+      due: 2026-11-20
+      owner: Iris

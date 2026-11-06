@@ -7,9 +7,9 @@ from pathlib import Path
 
 from rich.console import Console
 
-from vouch.demo import run_demo
-from vouch.models import PacketStatus
-from vouch.service import VouchPaths, VouchService
+from scopeguard.demo import run_demo
+from scopeguard.models import PacketStatus
+from scopeguard.service import ScopePaths, ScopeService
 
 
 def test_demo_runs_end_to_end_and_writes_a_transcript(repo_root: Path, tmp_path: Path) -> None:
@@ -23,27 +23,40 @@ def test_demo_runs_end_to_end_and_writes_a_transcript(repo_root: Path, tmp_path:
         console=Console(file=output, width=120),
     )
 
-    assert "Vouch - every promise, vouched for" in text
-    assert "1. A deal walks into the room" in text
-    assert "4. Examiner breaks the packet" in text
-    assert "8. Clerk seals the receipt" in text
-    assert "11. The audit chain closes" in text
+    assert "every 'one more thing' gets a price" in text
+    assert "## 1. A fixed-fee engagement gets four 'small' asks" in text
+    assert "## 4. Red Team breaks the packet" in text
+    assert "## 5. Revision invalidates every earlier signature" in text
+    assert "## 8. Clerk seals a two-party change order" in text
+    assert "## 10. Verification is adversarial, not decorative" in text
+    assert "## 12. The audit chain closes" in text
+
     written = transcript.read_text(encoding="utf-8")
-    assert written.startswith("# Vouch - demo transcript")
+    assert written.startswith("# Scope Guard - demo transcript")
     assert text in written
+    receipt_file = tmp_path / "receipt.json"
+    assert receipt_file.exists()
 
     # The demo leaves a real, verifiable ledger behind.
-    paths = VouchPaths.discover(root=repo_root, home=home)
-    with VouchService.open(paths) as service:
-        packet = service.store.latest_packet("acme-2026")
+    paths = ScopePaths.discover(root=repo_root, home=home)
+    with ScopeService.open(paths) as service:
+        packet = service.store.latest_packet("northwind-2026")
         assert packet.version == 2
         assert packet.status == PacketStatus.SEALED
-        receipt = service.store.latest_receipt("acme-2026")
-        result = service.verify(receipt, require_unexpired=False, pinned_key=True)
+        receipt = service.store.latest_receipt("northwind-2026")
+        assert receipt.acceptance is not None
+        assert receipt.acceptance.issuer == "Jordan Reyes"
+        result = service.verify(
+            receipt,
+            require_unexpired=True,
+            require_acceptance=True,
+            pinned_key=True,
+            pinned_client_key=True,
+        )
         assert result.ok is True
-        assert len(receipt.body.commitments) == 4
-        assert "DISC" in receipt.body.commitments[2].claim_id
-        assert receipt.body.commitments[2].commitment.startswith("15.00%")
+        assert len(receipt.body.line_items) == 4
+        assert receipt.body.total == 42240.0
+        assert receipt.body.discount_total == -5760.0
         assert service.store.verify_audit()[0] is True
 
 
@@ -54,4 +67,5 @@ def test_demo_without_a_transcript_still_runs(repo_root: Path, tmp_path: Path) -
         console=Console(file=io.StringIO(), width=120),
     )
     assert len(text) > 2_000
-    assert "Receipt" in text
+    assert "Change order" in text
+    assert "SCOPE ACCEPT Jordan Reyes" not in text

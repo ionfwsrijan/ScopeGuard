@@ -1,0 +1,77 @@
+room_id: room-northwind-scope
+messages:
+  - id: msg-001
+    sender: u-dana
+    sender_name: Dana
+    body: "Northwind wants a mobile app, a two-week pull-in, 20% off, and unlimited liability. They need an answer today."
+    timestamp_ms: 1793875200000
+  - id: msg-002
+    sender: a-scout
+    sender_name: Scout
+    body: "Four requests, four dated sources. Mobile is beta, not GA. One week of acceleration is supportable. Unlimited liability is not insurable."
+    timestamp_ms: 1793875260000
+  - id: msg-003
+    sender: a-pricer
+    sender_name: Pricer
+    body: "Packet v1 priced at 48,000 USD with a 20% discount. The Red Team still has to sign off on the margin."
+    timestamp_ms: 1793875320000
+  - id: msg-004
+    sender: u-dana
+    sender_name: Dana
+    body: "SIGN NORTHWIND-2026 RATE AS ACCOUNT_LEAD"
+    timestamp_ms: 1793875380000
+  - id: msg-005
+    sender: u-rae
+    sender_name: Rae
+    body: "SIGN NORTHWIND-2026 RATE AS FINANCE"
+    timestamp_ms: 1793875440000
+  - id: msg-006
+    sender: a-redteam
+    sender_name: Red Team
+    body: "BLOCK: rate_autonomy and margin_floor. 20% leaves 27.50% margin. v1 cannot be sealed."
+    timestamp_ms: 1793875500000
+  - id: msg-007
+    sender: u-dana
+    sender_name: Dana
+    body: "Understood. Re-signing the 12% version. SIGN NORTHWIND-2026 RATE AS ACCOUNT_LEAD"
+    timestamp_ms: 1793875560000
+  - id: msg-008
+    sender: u-rae
+    sender_name: Rae
+    body: "SIGN NORTHWIND-2026 RATE AS FINANCE"
+    timestamp_ms: 1793875620000
+  - id: msg-009
+    sender: u-dana
+    sender_name: Dana
+    body: "SIGN NORTHWIND-2026 MOBILE AS ACCOUNT_LEAD"
+    timestamp_ms: 1793875680000
+  - id: msg-010
+    sender: u-marco
+    sender_name: Marco
+    body: "SIGN NORTHWIND-2026 MOBILE AS DELIVERY_LEAD"
+    timestamp_ms: 1793875740000
+  - id: msg-011
+    sender: u-dana
+    sender_name: Dana
+    body: "SIGN NORTHWIND-2026 RUSH AS ACCOUNT_LEAD"
+    timestamp_ms: 1793875800000
+  - id: msg-012
+    sender: u-marco
+    sender_name: Marco
+    body: "SIGN NORTHWIND-2026 RUSH AS DELIVERY_LEAD"
+    timestamp_ms: 1793875860000
+  - id: msg-013
+    sender: u-dana
+    sender_name: Dana
+    body: "SIGN NORTHWIND-2026 TERMS AS ACCOUNT_LEAD"
+    timestamp_ms: 1793875920000
+  - id: msg-014
+    sender: u-iris
+    sender_name: Iris
+    body: "SIGN NORTHWIND-2026 TERMS AS LEGAL"
+    timestamp_ms: 1793875980000
+  - id: msg-015
+    sender: u-dana
+    sender_name: Dana
+    body: "SCOPE SEAL"
+    timestamp_ms: 1793876040000

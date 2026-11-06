@@ -3,50 +3,38 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
 
 import pytest
 
-from conftest import DEAL_ID, approve_all, prepare_v2
-from vouch.errors import NotFoundError
-from vouch.models import ApprovalStatus
-from vouch.service import VouchService
-from vouch.switch.clerk import Clerk
-from vouch.switch.fake import FakeSwitch
+from helpers import ENGAGEMENT_ID, sign_all
+from scopeguard.errors import NotFoundError
+from scopeguard.models import ApprovalStatus
+from scopeguard.service import ScopeService
+from scopeguard.switch.clerk import Clerk
+from scopeguard.switch.fake import FakeSwitch
 
-SALES = "room-acme-deal"
-DELIVERY = "room-acme-delivery"
-
-
-class FakeClient:
-    """The exact two-method surface Clerk needs, backed by FakeSwitch."""
-
-    def __init__(self, switch: FakeSwitch) -> None:
-        self.switch = switch
-
-    def read_context(self, room_id: str, limit: int = 100) -> dict[str, Any]:
-        return self.switch.read_context(room_id, limit=limit)
-
-    def post_message(self, room_id: str, content: str) -> dict[str, Any]:
-        return self.switch.post_message(room_id, content)
+SCOPE = "room-northwind-scope"
+DELIVERY = "room-northwind-delivery"
 
 
 @pytest.fixture
 def switch() -> FakeSwitch:
     value = FakeSwitch()
-    value.create_room(SALES, "#deal-acme")
-    value.create_room(DELIVERY, "#delivery-acme")
+    value.create_room(SCOPE, "#scope-northwind")
+    value.create_room(DELIVERY, "#delivery-northwind")
     return value
 
 
 @pytest.fixture
-def clerk(service: VouchService, switch: FakeSwitch) -> Clerk:
+def clerk(service: ScopeService, switch: FakeSwitch) -> Clerk:
+    from helpers import prepare_v2
+
     prepare_v2(service)
     return Clerk(
         service=service,
-        client=FakeClient(switch),  # type: ignore[arg-type]
-        deal_id=DEAL_ID,
-        sales_room_id=SALES,
+        client=switch,
+        engagement_id=ENGAGEMENT_ID,
+        scope_room_id=SCOPE,
         delivery_room_id=DELIVERY,
         sleep=lambda _: None,
     )
@@ -54,130 +42,143 @@ def clerk(service: VouchService, switch: FakeSwitch) -> Clerk:
 
 # --------------------------------------------------------------------- fake room
 def test_fake_room_assigns_ids_timestamps_and_senders(switch: FakeSwitch) -> None:
-    room = switch.room(SALES)
-    first = switch.human(SALES, "Priya", "hello")
-    second = switch.post(SALES, "Clerk", "hi")
-    assert first.id == "room-acme-deal-m1"
-    assert second.id == "room-acme-deal-m2"
-    assert first.sender == "human-priya"
+    room = switch.room(SCOPE)
+    first = switch.human(SCOPE, "Dana", "hello")
+    second = switch.post(SCOPE, "Clerk", "hi")
+    assert first.id == "room-northwind-scope-m1"
+    assert second.id == "room-northwind-scope-m2"
+    assert first.sender == "human-dana"
     assert second.sender == "agent-clerk"
     assert first.timestamp == datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
     assert room.next_sequence == 3
 
 
 def test_fake_room_context_is_a_thread_per_message(switch: FakeSwitch) -> None:
-    switch.human(SALES, "Priya", "one")
-    switch.human(SALES, "Sam", "two")
-    payload = switch.read_context(SALES)
+    switch.human(SCOPE, "Dana", "one")
+    switch.human(SCOPE, "Marco", "two")
+    payload = switch.read_context(SCOPE)
     assert [item["root"]["body"] for item in payload["threads"]] == ["one", "two"]
     assert payload["truncated"] is False
 
 
 def test_fake_room_context_honours_a_limit(switch: FakeSwitch) -> None:
     for index in range(5):
-        switch.human(SALES, "Priya", str(index))
-    payload = switch.read_context(SALES, limit=2)
+        switch.human(SCOPE, "Dana", str(index))
+    payload = switch.read_context(SCOPE, limit=2)
     assert [item["root"]["body"] for item in payload["threads"]] == ["3", "4"]
 
 
 def test_fake_switch_messages_can_be_filtered_since(switch: FakeSwitch) -> None:
-    switch.room(SALES).add("Priya", "old", at=datetime(2026, 11, 4, 12, 0, tzinfo=UTC))
-    latest = switch.room(SALES).add("Priya", "new", at=datetime(2026, 11, 4, 12, 1, tzinfo=UTC))
-    assert [item.body for item in switch.messages(SALES, since=latest.timestamp_ms)] == ["new"]
+    switch.room(SCOPE).add("Dana", "old", at=datetime(2026, 11, 4, 12, 0, tzinfo=UTC))
+    latest = switch.room(SCOPE).add("Dana", "new", at=datetime(2026, 11, 4, 12, 1, tzinfo=UTC))
+    assert [item.body for item in switch.messages(SCOPE, since=latest.timestamp_ms)] == ["new"]
 
 
-# --------------------------------------------------------------------- clerk run
+# ---------------------------------------------------------------------- clerk run
 def test_clerk_records_exactly_the_approval_messages(clerk: Clerk, switch: FakeSwitch) -> None:
-    switch.human(SALES, "Priya", "APPROVE ACME-2026 SSO AS AE")
-    switch.human(SALES, "Sam", "APPROVE ACME-2026 SSO AS ENG_LEAD")
-    switch.human(SALES, "Priya", "this is not an approval")
+    switch.human(SCOPE, "Dana", "SIGN NORTHWIND-2026 MOBILE AS ACCOUNT_LEAD")
+    switch.human(SCOPE, "Marco", "SIGN NORTHWIND-2026 MOBILE AS DELIVERY_LEAD")
+    switch.human(SCOPE, "Dana", "this is not an approval")
     result = clerk.run_once()
     assert result == {"scanned": 3, "recorded": 2, "ignored": 1}
-    packet = clerk.service.store.latest_packet(DEAL_ID)
+    packet = clerk.service.store.latest_packet(ENGAGEMENT_ID)
     assert len(clerk.service.store.approvals_for_packet(packet)) == 2
-    # The Clerk posts a progress line back into the same room.
-    assert any("Recorded 2 approval" in item.body for item in switch.messages(SALES))
+    assert any("Recorded 2 signature(s)" in item.body for item in switch.messages(SCOPE))
 
 
 def test_clerk_is_idempotent_across_polls(clerk: Clerk, switch: FakeSwitch) -> None:
-    switch.human(SALES, "Priya", "APPROVE ACME-2026 SSO AS AE")
+    switch.human(SCOPE, "Dana", "SIGN NORTHWIND-2026 MOBILE AS ACCOUNT_LEAD")
     assert clerk.run_once()["recorded"] == 1
     second = clerk.run_once()
     assert second["recorded"] == 0
     assert second["scanned"] == 1  # one new Clerk status message, not a phrase
-    assert (
-        len(clerk.service.store.approvals_for_packet(clerk.service.store.latest_packet(DEAL_ID)))
-        == 1
-    )
+    packet = clerk.service.store.latest_packet(ENGAGEMENT_ID)
+    assert len(clerk.service.store.approvals_for_packet(packet)) == 1
 
 
 def test_clerk_answers_status_chatter(clerk: Clerk, switch: FakeSwitch) -> None:
-    switch.human(SALES, "Maya", "VOUCH STATUS")
+    switch.human(SCOPE, "Dana", "SCOPE STATUS")
     clerk.run_once()
-    bodies = [item.body for item in switch.messages(SALES)]
-    assert any("Vouch status" in body for body in bodies)
+    bodies = [item.body for item in switch.messages(SCOPE)]
+    assert any("Scope Guard status" in body for body in bodies)
     assert any("Packet v2" in body for body in bodies)
 
 
 def test_clerk_seal_is_refused_until_the_gate_is_clear(clerk: Clerk, switch: FakeSwitch) -> None:
-    switch.human(SALES, "Maya", "VOUCH SEAL")
+    switch.human(SCOPE, "Dana", "SCOPE SEAL")
     clerk.run_once()
-    assert any("Cannot seal" in item.body for item in switch.messages(SALES))
+    assert any("Cannot seal" in item.body for item in switch.messages(SCOPE))
     with pytest.raises(NotFoundError):
-        clerk.service.store.latest_receipt(DEAL_ID)
+        clerk.service.store.latest_receipt(ENGAGEMENT_ID)
 
 
-def test_clerk_seals_and_posts_the_handoff(clerk: Clerk, switch: FakeSwitch) -> None:
-    approve_all(clerk.service)
-    switch.human(SALES, "Maya", "VOUCH SEAL")
+def test_clerk_seals_accepts_and_posts_the_handoff(clerk: Clerk, switch: FakeSwitch) -> None:
+    sign_all(clerk.service)
+    switch.human(SCOPE, "Dana", "SCOPE SEAL")
     clerk.run_once()
-    receipt = clerk.service.store.latest_receipt(DEAL_ID)
-    assert receipt.body.receipt_id.startswith("vch_")
-    sales = [item.body for item in switch.messages(SALES)]
+    receipt = clerk.service.store.latest_receipt(ENGAGEMENT_ID)
+    assert receipt.body.receipt_id.startswith("co_")
+    assert any("Sealed." in item.body for item in switch.messages(SCOPE))
+
+    switch.human(SCOPE, "Jordan", "SCOPE ACCEPT Jordan Reyes")
+    clerk.run_once()
+    accepted_receipt = clerk.service.store.latest_receipt(ENGAGEMENT_ID)
+    assert accepted_receipt.acceptance is not None
+    assert accepted_receipt.acceptance.issuer == "Jordan Reyes"
+
+    sales = [item.body for item in switch.messages(SCOPE)]
     delivery = [item.body for item in switch.messages(DELIVERY)]
-    assert any("Sealed." in body for body in sales)
-    assert any("Receipt" in body for body in delivery)
-    assert any("Only the commitments above leave this room." in body for body in delivery)
+    assert any("Accepted by Jordan Reyes" in body for body in sales)
+    assert any("Only the line items above leave this room." in body for body in delivery)
+    assert any(receipt.body.receipt_id in body for body in delivery)
 
 
 def test_clerk_handoff_before_sealing_is_clear(clerk: Clerk, switch: FakeSwitch) -> None:
     assert clerk.handoff_text().startswith("No handoff yet")
-    switch.human(SALES, "Maya", "VOUCH HANDOFF")
+    switch.human(SCOPE, "Dana", "SCOPE HANDOFF")
     clerk.run_once()
-    assert any("No handoff yet" in item.body for item in switch.messages(SALES))
+    assert any("No handoff yet" in item.body for item in switch.messages(SCOPE))
 
 
 def test_clerk_run_loops_the_requested_number_of_times(clerk: Clerk) -> None:
     calls: list[float] = []
-    clerk.sleep = calls.append
+    clerk.sleep = calls.append  # type: ignore[method-assign]
     clerk.run(iterations=3)
     assert calls == [clerk.interval, clerk.interval]
 
 
 def test_seen_ids_are_not_reprocessed(clerk: Clerk, switch: FakeSwitch) -> None:
-    switch.human(SALES, "Priya", "APPROVE ACME-2026 SSO AS AE")
+    switch.human(SCOPE, "Dana", "SIGN NORTHWIND-2026 MOBILE AS ACCOUNT_LEAD")
     first = clerk.run_once()
     clerk.seen.clear()
     second = clerk.run_once()
     assert first["recorded"] == 1
-    # Clearing the seen set re-scans the original approval, but the approval
-    # layer itself is idempotent for the same actor.
+    # Clearing the seen set re-scans the original approval; the approval layer
+    # itself is idempotent for the same actor.
     assert second["recorded"] == 1
-    assert (
-        len(
-            [
-                item
-                for item in clerk.service.store.approvals_for_packet(
-                    clerk.service.store.latest_packet(DEAL_ID)
-                )
-                if item.claim_id == "SSO" and item.role == "AE"
-            ]
-        )
-        == 1
-    )
-    assert all(
-        item.status == ApprovalStatus.VALID
-        for item in clerk.service.store.approvals_for_packet(
-            clerk.service.store.latest_packet(DEAL_ID)
-        )
-    )
+    packet = clerk.service.store.latest_packet(ENGAGEMENT_ID)
+    approvals = [
+        item
+        for item in clerk.service.store.approvals_for_packet(packet)
+        if item.request_id == "MOBILE" and item.role == "ACCOUNT_LEAD"
+    ]
+    assert len(approvals) == 1
+    assert approvals[0].status == ApprovalStatus.VALID.value
+
+
+def test_clerk_status_view_reports_a_sealed_change_order(clerk: Clerk, switch: FakeSwitch) -> None:
+    sign_all(clerk.service)
+    clerk.service.seal(ENGAGEMENT_ID)
+    text = clerk.status_text()
+    assert "Change order:" in text
+    assert "awaiting client" in text
+    assert "Gate: **clear**." in text
+
+
+def test_clerk_accept_without_a_sealed_change_order_is_reported(
+    clerk: Clerk, switch: FakeSwitch
+) -> None:
+    switch.human(SCOPE, "Jordan", "SCOPE ACCEPT Jordan Reyes")
+    result = clerk.run_once()
+    assert result["recorded"] == 0
+    assert any("Acceptance not recorded" in item.body for item in switch.messages(SCOPE))

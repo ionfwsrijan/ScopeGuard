@@ -2,207 +2,235 @@
 
 The policy is a small, reviewable YAML document. It is loaded into typed models
 and evaluated by pure functions. Finance and legal can argue about the numbers
-in a pull request instead of arguing about a model's output after the deal is
-signed.
+in a pull request instead of arguing about a model's output after the change
+order is signed.
 
-Default: [`policies/deal_policy_v1.yaml`](../policies/deal_policy_v1.yaml).
+Default: [`policies/scope_policy_v1.yaml`](../policies/scope_policy_v1.yaml).
 
 ```yaml
-id: deal-policy-v1
+id: scope-policy-v1
 version: 1
 currency: USD
 max_evidence_age_days: 90
 
-discount:
+rate:
   max_pct: 20
-  autonomy_pct: 15
-  margin_floor_pct: 33
+  autonomy_pct: 12
+  margin_floor_pct: 30
+  quote_valid_days: 14
 
-sla:
-  max_uptime_pct: 99.95
-  standard_uptime_pct: 99.9
-  min_observed_uptime_pct: 99.9
-  credit_required: true
-  maintenance_language_required: true
+timeline:
+  max_weeks_saved: 1
+  rush_premium_pct: 25
+  min_confidence_pct: 80
+  require_capacity_evidence: true
 
-feature:
+new_work:
   allow_beta: true
-  allow_roadmap: true
+  allow_ga_estimate: true
 
-security:
-  allowed_statuses: [certified, in_progress]
-  require_report_date_for_in_progress: true
+terms:
+  max_liability_multiple: 2
+  allow_unlimited_liability: false
+  require_legal_review: true
 
 approval_matrix:
-  feature: [AE, ENG_LEAD]
-  sla: [AE, ENG_LEAD]
-  discount: [AE, VP_SALES]
-  security: [AE, LEGAL]
+  new_work: [ACCOUNT_LEAD, DELIVERY_LEAD]
+  timeline: [ACCOUNT_LEAD, DELIVERY_LEAD]
+  rate: [ACCOUNT_LEAD, FINANCE]
+  terms: [ACCOUNT_LEAD, LEGAL]
 ```
 
 ## Thresholds
 
 | Rule | Value | Meaning |
 | --- | --- | --- |
-| Discount ceiling | 20% | Above this, the Actuary narrows to 20% before challenge |
-| Autonomy ceiling | 15% | Above this, the Examiner requires a documented CFO exception |
-| Margin floor | 33% | Approved discount must not push gross margin below this |
-| SLA maximum | 99.95% | Above this cannot be approved by this workflow |
-| SLA standard | 99.9% | The standard contractual commitment |
-| Minimum observed | 99.9% | Below this, reliability must improve before an SLA is sold |
+| Discount ceiling | 20% | Above this, the Pricer narrows to 20% before the Red Team sees it |
+| Autonomy ceiling | 12% | Above this, the Red Team requires a documented finance exception that this workflow does not have |
+| Margin floor | 30% | The approved discount must not push gross margin below this |
+| Quote validity | 14 days | The rate line expires with the change order |
+| Acceleration cap | 1 week | The most delivery can compress without a new staffing plan |
+| Rush premium | 25% | Applied to the incremental rush hours |
+| Confidence floor | 80% | Below this, no acceleration can be promised |
+| Liability cap | 2x fees | Unlimited liability is refused |
 | Evidence age | 90 days | Older evidence is stale |
 
 ## Margin arithmetic
 
-With annual list price `P` and cost ratio `c`, revenue after discount `d` is
-`P·(1−d)`, cost is `P·c`, so gross margin is:
+With a fixed fee `P` and a delivery cost ratio `c`, revenue after discount `d`
+is `P·(1−d)` and cost is `P·c`, so gross margin is:
 
 ```
 margin(d) = 1 − c / (1 − d)
 ```
 
-For Acme, `c = 0.55`:
+For Northwind, `c = 0.58`:
 
 | Discount | Margin | Verdict |
 | --- | --- | --- |
-| 0% | 45.00% | inside floor |
-| 10% | 38.89% | inside floor |
-| 15% | 35.29% | inside floor, above autonomy |
-| 17.91% | 33.00% | exactly at floor |
-| 20% | 31.25% | **below floor** |
+| 0% | 42.00% | inside floor |
+| 10% | 35.56% | inside floor |
+| 12% | 34.09% | inside floor, exactly at autonomy |
+| 17.14% | 30.00% | exactly at the margin floor |
+| 20% | 27.50% | **below floor** |
 
 Two independent controls apply to 20%:
 
-1. **Autonomy** — 20% > 15%, so a CFO exception reference is required. None is
-   attached, so the Examiner blocks.
-2. **Margin** — 20% produces 31.25% < 33%, so the Examiner blocks again.
+1. **Autonomy** — 20% > 12%, so a finance exception reference is required. None
+   is attached, so the Red Team blocks.
+2. **Margin** — 20% produces 27.50% < 30%, so the Red Team blocks again.
 
-The Examiner proposes the smaller of the two corrections: the autonomy ceiling
-(15%) is below the margin-derived maximum (17.91%), so the revision narrows to
-15.00%.
+The Red Team proposes the smaller of the two corrections: the autonomy ceiling
+(12%) is below the margin-derived maximum (17.14%), so the revision narrows to
+**12.00%**. That raises the change order from **38,400** to **42,240** and
+protects **3,840** of margin.
 
-## Claim-by-claim behaviour
+`Policy.max_discount_for_margin(c)` solves the same equation for the largest
+discount that still meets the floor. A cost ratio at or above 100% returns
+`None`, because no price can reach the floor.
 
-### Feature
+## Request-by-request behaviour
 
-Reads the latest `roadmap` evidence for the claim.
+### `new_work`
 
-| Evidence | Verdict | Approved language |
+Reads the latest `estimate` evidence for the request.
+
+| Evidence | Verdict | Priced language |
 | --- | --- | --- |
-| GA date ≤ requested | `approve` | GA committed by the requested date |
-| Beta date ≤ requested, GA later | `narrow` | Beta by date; GA targeted quarter, **not committed** |
+| GA date ≤ requested | `approve` | GA committed by the requested date, full estimate hours |
+| Beta date ≤ requested, GA later | `narrow` | Beta by date; GA targeted quarter, **not included**; beta hours only |
 | Beta supported but `allow_beta: false` | `refuse` | No beta commitment permitted |
-| No beta or GA inside the window | `escalate` | Product must supply a target |
-| No roadmap evidence | `escalate` | Evidence required |
+| No beta or GA inside the window | `escalate` | Delivery must supply a supportable target |
+| No estimate | `escalate` | Evidence required |
+
+For Northwind, the estimate is 320 hours for GA in Q1 2027 and 200 hours for a
+beta on 2026-12-01. The client asked for GA on 2026-12-15, so the line item is
+**200 × $150 = $30,000** for the beta, with GA explicitly excluded.
 
 The narrowing is explicit: the approved text contains the word **beta** and the
-phrase **not committed**, and the conditions forbid customer-facing GA language.
+word **not included**, and the conditions forbid customer-facing GA language.
 This is the difference between "we can probably do it" and a promise.
 
-### SLA
+### `timeline`
 
-Reads the latest `monitoring` evidence.
+Reads the latest `capacity` evidence.
 
 ```
-supportable = min(requested, policy.max_uptime_pct, policy.standard_uptime_pct)
+allowed = min(requested_weeks, supported_weeks, policy.max_weeks_saved)
+price   = rush_hours × rate × (1 + premium_pct / 100)
 ```
 
 | Evidence | Verdict |
 | --- | --- |
-| Observed < minimum observed | `escalate` — no SLA until reliability improves |
-| Requested ≤ supportable and observed ≥ requested | `approve` |
-| Otherwise | `narrow` to `supportable` |
+| Confidence < floor | `escalate` — no acceleration on this plan |
+| No compressible weeks | `refuse` |
+| `allowed < requested` | `narrow` to `allowed` |
+| Otherwise | `approve` |
 
-Every SLA commitment carries service-credit and maintenance-window conditions
-when policy requires them, plus a monthly measurement statement.
+For Northwind, the client asks for two weeks. The plan supports one week at 88%
+confidence, and policy caps it at one. The line item is one week of acceleration
+for **64 × $150 × 1.25 = $12,000**. Every acceleration carries a condition that
+excludes client-side delays, reserves capacity, and requires a named client
+decision-maker.
 
-For Acme: requested 99.95%, standard 99.90%, observed 99.92%. Supportable is
-99.90%, so the ask narrows to **99.90%**, not 99.95%.
+### `rate`
 
-### Discount
-
-Reads the latest `pricing` evidence. Hard-narrows to the policy ceiling:
+Reads the latest `rate_card` evidence.
 
 ```
-approved = min(requested, max_pct)
+approved = min(requested, policy.rate.max_pct)
+amount   = −(sum of positive line items) × approved / 100
 ```
 
-The Actuary does **not** apply the autonomy or margin floors — those belong to
-the Examiner, whose job is to be independent. This separation is deliberate: if
-the assessment already applied every control, the challenge would be decorative.
+The Pricer does **not** apply the autonomy or margin floors — those belong to the
+Red Team, whose job is to be independent. This separation is deliberate: if the
+Pricer already applied every control, the challenge would be decorative.
 
-The approved value records `discount_pct`, `requested_pct`, `net_price_pct`, and
-`annual_list_price`, so the receipt is financially legible.
+The approved value records `discount_pct`, `requested_pct`, `base_amount`,
+`margin_pct`, and `net_total`, so the change order is financially legible.
 
-### Security
+For Northwind, the positive line items total **$48,000**. A 20% request produces
+**−$9,600** and a 27.50% margin. The Pricer approves it; the Red Team blocks it;
+the revision reprices at 12% for **−$5,760** and a 34.09% margin.
 
-Reads the latest `security_report` evidence.
+### `terms`
+
+Reads the latest `contract` evidence.
 
 | Evidence | Verdict |
 | --- | --- |
-| Status not in `allowed_statuses` | `escalate` |
-| Status `in_progress`, report date present | `narrow` to exact status + date, "not certified" |
-| Status `in_progress`, no report date and policy requires it | `narrow`/`escalate` with a missing-date condition |
-| Status `certified` and requested "certified" | `approve` |
-| Evidence says in progress but request says certified | `narrow` to "in progress; not certified" |
+| Unlimited liability requested, policy refuses it | `narrow` to the policy multiple, explicitly refusing unlimited |
+| Requested multiple above the cap | `narrow` to the cap |
+| Otherwise | `approve` |
+| No contract | `escalate` |
 
-The approved language never upgrades evidence. "In progress" stays "in
-progress", and the report date is stated.
+The legal review is priced from `review_hours × rate`. For Northwind,
+**40 × $150 = $6,000**. The approved language never upgrades evidence: unlimited
+liability stays refused, and the security addendum is bounded to the scope in
+the change order.
 
 ## Approval matrix
 
-| Claim type | Roles |
+| Request type | Roles |
 | --- | --- |
-| `feature` | `AE`, `ENG_LEAD` |
-| `sla` | `AE`, `ENG_LEAD` |
-| `discount` | `AE`, `VP_SALES` |
-| `security` | `AE`, `LEGAL` |
+| `new_work` | `ACCOUNT_LEAD`, `DELIVERY_LEAD` |
+| `timeline` | `ACCOUNT_LEAD`, `DELIVERY_LEAD` |
+| `rate` | `ACCOUNT_LEAD`, `FINANCE` |
+| `terms` | `ACCOUNT_LEAD`, `LEGAL` |
 
-Role holders come from [`fixtures/acme/approvers.yaml`](../fixtures/acme/approvers.yaml):
+Role holders come from
+[`fixtures/northwind/approvers.yaml`](../fixtures/northwind/approvers.yaml):
 
 ```yaml
+engagement_id: northwind-2026
 roles:
-  AE: [Priya]
-  VP_SALES: [Maya]
-  ENG_LEAD: [Sam]
-  LEGAL: [Alex]
+  ACCOUNT_LEAD: [Dana]
+  DELIVERY_LEAD: [Marco]
+  FINANCE: [Rae]
+  LEGAL: [Iris]
 ```
 
-A role can have several holders ("any one of these people may approve"), but one
-person cannot satisfy two different roles. The gate counts distinct
-`(claim, role)` pairs, and the receipt records exactly which person said which
-phrase.
+A role can have several holders ("any one of these people may sign"), but one
+person cannot satisfy two different roles for the same request. The gate counts
+distinct `(request, role)` pairs, and the change order records exactly which
+person said which phrase.
+
+The four requests require eight signatures in total: two for each of `new_work`,
+`timeline`, `rate`, and `terms`. Northwind's `ACCOUNT_LEAD` signs four times,
+once per request. That is intentional: the account lead owns the client
+relationship on every line, while finance, legal, and delivery own their own
+domain.
 
 ## Evidence admissibility
 
 An evidence item must have:
 
-- a stable id (`EV-*`) and a claim id,
-- a kind from the allowed set (`roadmap`, `monitoring`, `security_report`,
-  `pricing`, `contract`, `note`),
+- a stable id (`EV-*`) and a request id,
+- a kind from the allowed set: `estimate`, `capacity`, `rate_card`, `contract`,
+  `sow`, or `note`,
 - a named source owned by an accountable team,
 - an `observed_at` date,
 - a summary,
 - and a payload with the fields the relevant assessor reads.
 
 Evidence older than `max_evidence_age_days`, or past `valid_until`, is stale.
-The Examiner reports it and no commitment may rely on it.
+The Red Team reports it and no commitment may rely on it.
 
 Chat is not evidence. A model's summary is not evidence. Only a dated, sourced
 record is.
 
 ## Changing the policy
 
-1. Copy the YAML to a new file, for example `policies/deal_policy_v2.yaml`.
+1. Copy the YAML to a new file, for example `policies/scope_policy_v2.yaml`.
 2. Bump `version`.
-3. Pass `--policy policies/deal_policy_v2.yaml` to any command, or set the path
+3. Pass `--policy policies/scope_policy_v2.yaml` to any command, or set the path
    in the service.
 4. Re-assess. The packet hash changes because the decisions change, which
-   invalidates prior approvals by construction.
+   invalidates prior signatures by construction.
 
-Policy changes are not hot-reloaded into a sealed packet. A receipt records the
-`policy_id` it was issued under, so an old receipt remains verifiable against
-the policy it claims.
+Policy changes are not hot-reloaded into a sealed packet. A change order records
+the `policy_id` it was issued under, so an old change order remains verifiable
+against the policy it claims.
 
 ## What the policy is not
 

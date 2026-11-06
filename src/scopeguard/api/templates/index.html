@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Scope Guard - every one more thing gets a price{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Change orders for fixed-fee services</p>
+    <h1>Every "one more thing"<br><em>gets a price.</em></h1>
+    <p class="lede">
+      A client asks for a mobile app, a two-week pull-in, 20% off, and unlimited liability.
+      Scope Guard prices all four against policy, sends an independent Red Team to break the
+      answer, asks named humans to sign the exact hash in Switch, and gets the client to
+      countersign before anything reaches delivery.
+    </p>
+    <div class="hero-actions">
+      <a class="button primary" href="/verify">Verify a change order</a>
+      <a class="button ghost" href="#workflow">How it works</a>
+    </div>
+    <p class="fineprint">
+      Pricing is deterministic. The challenge is independent. Signatures are human and
+      hash-bound. Delivery receives only what both parties signed.
+    </p>
+  </div>
+  <div class="hero-art" aria-hidden="true">
+    <div class="receipt-card">
+      <div class="receipt-card-top">
+        <span class="stamp">SIGNED</span>
+        <span class="mono" title="Illustrative change order">co_northwind…</span>
+      </div>
+      <div class="receipt-line"><span>Client</span><strong>Northwind Health</strong></div>
+      <div class="receipt-line"><span>Mobile</span><strong class="warn">beta · GA not committed</strong></div>
+      <div class="receipt-line"><span>Acceleration</span><strong class="warn">1 week · rush premium</strong></div>
+      <div class="receipt-line"><span>Discount</span><strong class="warn">12% · margin floor</strong></div>
+      <div class="receipt-line"><span>Liability</span><strong class="bad">unlimited refused</strong></div>
+      <div class="receipt-divider"></div>
+      <div class="receipt-line"><span>Total</span><strong class="ok">$42,240.00</strong></div>
+      <div class="receipt-line small"><span>Signed by</span><strong>Dana · Marco · Rae · Iris</strong></div>
+      <div class="receipt-line small"><span>Countersigned</span><strong class="mono ok">Northwind · verified</strong></div>
+    </div>
+    <div class="orbit orbit-a"></div>
+    <div class="orbit orbit-b"></div>
+  </div>
+</section>
+
+<section class="stats" aria-label="Ledger stats">
+  <div class="stat"><span class="stat-value">{{ stats.engagements }}</span><span class="stat-label">engagements</span></div>
+  <div class="stat"><span class="stat-value">{{ stats.packets }}</span><span class="stat-label">priced packets</span></div>
+  <div class="stat"><span class="stat-value">{{ stats.approvals }}</span><span class="stat-label">human signatures</span></div>
+  <div class="stat"><span class="stat-value">{{ stats.receipts }}</span><span class="stat-label">change orders</span></div>
+  <div class="stat"><span class="stat-value">{{ stats.audit }}</span><span class="stat-label">chained events</span></div>
+  <div class="stat audit {{ 'ok' if audit_ok else 'bad' }}">
+    <span class="stat-value">{{ 'OK' if audit_ok else 'BROKEN' }}</span>
+    <span class="stat-label">audit chain</span>
+  </div>
+</section>
+
+<section id="workflow" class="workflow">
+  <div class="section-head">
+    <h2>Two rooms. Four agents. Four signers.</h2>
+    <p>Switch is the coordination layer, not a notification afterthought. The work happens in the room.</p>
+  </div>
+  <div class="steps">
+    <article class="step-card">
+      <span class="step-num">01</span>
+      <h3>Scout: evidence</h3>
+      <p><strong>Scout</strong> turns the client's message into four typed asks and attaches dated, sourced evidence to each. An assertion in chat is not evidence.</p>
+    </article>
+    <article class="step-card">
+      <span class="step-num">02</span>
+      <h3>Pricer: the number</h3>
+      <p><strong>Pricer</strong> applies deterministic policy and writes priced, narrowed language. Same engagement, policy, and evidence always produce the same total.</p>
+    </article>
+    <article class="step-card">
+      <span class="step-num">03</span>
+      <h3>Red Team: the attack</h3>
+      <p><strong>Red Team</strong> recomputes the margin, checks autonomy and evidence age, and blocks the packet by default. A block forces a new hash and invalidates old signatures.</p>
+    </article>
+    <article class="step-card">
+      <span class="step-num">04</span>
+      <h3>Clerk: the signature</h3>
+      <p><strong>Clerk</strong> records exact human phrases, seals a two-party change order, and hands only signed line items to the linked delivery room.</p>
+    </article>
+  </div>
+</section>
+
+<section class="ledger">
+  <div class="section-head">
+    <h2>Live ledger</h2>
+    <p>Read-only. Signatures happen in Switch, where the people are.</p>
+  </div>
+
+  {% if cases %}
+  <div class="case-grid">
+    {% for case in cases %}
+    <a class="case-card" href="/engagements/{{ case.engagement.id }}">
+      <div class="case-top">
+        <div>
+          <span class="case-account">{{ case.engagement.client }}</span>
+          <span class="mono muted">{{ case.engagement.id }}</span>
+        </div>
+        {% if case.receipt %}
+          <span class="badge ok">{{ 'countersigned' if case.receipt.acceptance else 'sealed' }}</span>
+        {% elif case.packet %}
+          <span class="badge {{ 'bad' if case.packet.status == 'blocked' else 'warn' }}">{{ case.packet.status }}</span>
+        {% else %}
+          <span class="badge muted">ingested</span>
+        {% endif %}
+      </div>
+      <div class="case-meta">
+        <span>{{ case.engagement.requests|length }} requests</span>
+        <span>{{ case.evidence_count }} evidence</span>
+        <span>v{{ case.packet.version if case.packet else 0 }}</span>
+      </div>
+      {% if case.packet %}
+      <div class="case-commitments">
+        {% for d in case.packet.decisions %}
+          <div class="mini-row">
+            <span class="mono">{{ d.request_id }}</span>
+            <span class="verdict {{ d.verdict|verdict_class }}">{{ d.verdict }}</span>
+            <span class="mini-text">{{ d.priced_text }}</span>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="case-foot">
+        {% if case.receipt %}
+          <span class="ok">{{ case.receipt.body.receipt_id }} · {{ case.receipt.body.total|money }} {{ case.receipt.body.currency }}</span>
+        {% elif case.pending %}
+          <span class="warn">{{ case.pending|length }} signatures pending</span>
+        {% else %}
+          <span class="muted">gate clear</span>
+        {% endif %}
+        <span class="arrow">→</span>
+      </div>
+      {% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <h3>The ledger is empty.</h3>
+    <p>Run the deterministic end-to-end demo, then reload this page.</p>
+    <pre><code>scopeguard demo
+scopeguard ingest --fixture northwind
+scopeguard assess --engagement northwind-2026</code></pre>
+  </div>
+  {% endif %}
+</section>
+
+{% if receipts %}
+<section class="receipts-strip">
+  <div class="section-head">
+    <h2>Recent change orders</h2>
+    <p>Each one is independently verifiable from its signed body and optional client acceptance.</p>
+  </div>
+  <div class="receipt-list">
+    {% for receipt in receipts %}
+    <a class="receipt-row" href="/change-orders/{{ receipt.body.receipt_id }}">
+      <span class="mono">{{ receipt.body.receipt_id }}</span>
+      <span>{{ receipt.body.client }}</span>
+      <span class="muted">{{ receipt.body.line_items|length }} line items</span>
+      <span class="mono muted">{{ receipt.body.total|money }} {{ receipt.body.currency }}</span>
+      <span class="{{ 'ok' if receipt.acceptance else 'warn' }}">{{ 'two-party signed' if receipt.acceptance else 'awaiting client' }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}

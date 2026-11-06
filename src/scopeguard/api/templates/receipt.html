@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}{{ receipt.body.receipt_id }} - Scope Guard{% endblock %}
+{% block content %}
+
+<nav class="crumbs"><a href="/">Ledger</a><span>/</span><a href="/engagements/{{ receipt.body.engagement_id }}">{{ receipt.body.engagement_id }}</a><span>/</span><span>change order</span></nav>
+
+<div class="receipt-layout">
+  <article class="scopeguarder">
+    <header class="scopeguarder-head">
+      <div class="scopeguarder-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 36" width="30" height="34"><path d="M16 1.5 29 6v11.2c0 8.2-5.4 14.4-13 17.3C8.4 31.6 3 25.4 3 17.2V6L16 1.5Z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="m9.5 17.4 4.2 4.2 8.8-9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <div>
+          <p class="scopeguarder-title">Scope Guard Change Order</p>
+          <p class="mono muted">{{ receipt.body.receipt_id }}</p>
+        </div>
+      </div>
+      <div class="scopeguarder-seal {{ 'ok' if result.ok else 'bad' }}">
+        <span>{{ 'TWO-PARTY' if receipt.acceptance and result.ok else 'SIGNED' if result.ok else 'INVALID' }}</span>
+        <small>Ed25519</small>
+      </div>
+    </header>
+
+    <div class="scopeguarder-meta">
+      <div><span>Client</span><strong>{{ receipt.body.client }}</strong></div>
+      <div><span>Engagement</span><strong class="mono">{{ receipt.body.engagement_id }}</strong></div>
+      <div><span>Packet</span><strong class="mono">v{{ receipt.body.packet_version }}</strong></div>
+      <div><span>Policy</span><strong class="mono">{{ receipt.body.policy_id }}</strong></div>
+      <div><span>Issued</span><strong>{{ receipt.body.issued_at.date() }}</strong></div>
+      <div><span>Expires</span><strong>{{ receipt.body.expires_at.date() }}</strong></div>
+    </div>
+
+    <section class="scopeguarder-section">
+      <h2>Signed line items</h2>
+      <p class="scopeguarder-lede">Only these statements may be represented to the client or handed to delivery.</p>
+      {% for item in receipt.body.line_items %}
+      <div class="scopeguarder-commitment">
+        <div class="scopeguarder-commitment-head">
+          <span class="mono">{{ item.request_id }}</span>
+          <span class="badge {{ item.verdict|verdict_class }}">{{ item.verdict }}</span>
+          <span class="mono {{ 'ok' if item.amount >= 0 else 'warn' }}">{{ item.amount|signed }} {{ receipt.body.currency }}</span>
+        </div>
+        <p class="scopeguarder-commitment-text">{{ item.scope }}</p>
+        {% if item.conditions %}
+        <ul class="conditions compact">
+          {% for c in item.conditions %}<li>{{ c }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <div class="packet-total">
+        <span>Subtotal <strong>{{ receipt.body.subtotal|money }}</strong></span>
+        <span>Discount <strong>{{ receipt.body.discount_total|money }}</strong></span>
+        <span class="total">Total <strong>{{ receipt.body.total|money }} {{ receipt.body.currency }}</strong></span>
+      </div>
+    </section>
+
+    {% if receipt.body.declined %}
+    <section class="scopeguarder-section">
+      <h2>Not committed</h2>
+      <p class="muted">These asks were assessed but receive no line item.</p>
+      <div class="chips">{% for c in receipt.body.declined %}<span class="chip bad">{{ c }}</span>{% endfor %}</div>
+    </section>
+    {% endif %}
+
+    <section class="scopeguarder-section">
+      <h2>Human signatures</h2>
+      <table class="table scopeguarder-table">
+        <thead><tr><th>Request</th><th>Role</th><th>Signer</th><th>Exact phrase</th><th>Bound</th></tr></thead>
+        <tbody>
+          {% for a in receipt.body.approvals %}
+          <tr>
+            <td class="mono">{{ a.request_id }}</td>
+            <td>{{ a.role }}</td>
+            <td>{{ a.actor }}</td>
+            <td class="mono phrase">{{ a.phrase }}</td>
+            <td class="muted">{{ a.approved_at.date() }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="scopeguarder-section">
+      <h2>Client acceptance</h2>
+      {% if receipt.acceptance %}
+      <p><strong>{{ receipt.acceptance.issuer }}</strong> countersigned the issuer's body hash on {{ receipt.body.issued_at.date() }}.</p>
+      <p class="muted small">This is a second Ed25519 signature over the body hash, the issuer name, and the client's public key. It is not a copy of the issuer's signature.</p>
+      <details>
+        <summary>Client public key</summary>
+        <code class="break">{{ receipt.acceptance.public_key }}</code>
+      </details>
+      <details>
+        <summary>Client signature</summary>
+        <code class="break">{{ receipt.acceptance.signature }}</code>
+      </details>
+      {% else %}
+      <p class="warn"><strong>Awaiting client countersignature.</strong> The issuer signature proves Scope Guard produced this change order. It does not yet prove the client accepted it.</p>
+      {% endif %}
+    </section>
+
+    <footer class="scopeguarder-foot">
+      <div><span>Packet hash</span><code>{{ receipt.body.packet_hash }}</code></div>
+      <div><span>Body hash</span><code>{{ receipt.body_hash }}</code></div>
+      <div><span>Chain previous</span><code>{{ receipt.body.chain_prev or 'genesis for this engagement' }}</code></div>
+      <div><span>Issuer</span><strong>{{ receipt.body.issuer }}</strong></div>
+    </footer>
+  </article>
+
+  <aside class="receipt-rail">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Verification</h2>
+        <span class="badge {{ 'ok' if result.ok else 'bad' }}">{{ 'pass' if result.ok else 'fail' }}</span>
+      </div>
+      <p class="{{ 'ok' if result.ok else 'bad' }}">{{ result.summary }}</p>
+      <ul class="checks">
+        {% for check in result.checks %}
+        <li class="{{ 'ok' if check.ok else 'bad' }}">
+          <span class="check-dot"></span>
+          <span><strong>{{ check.code }}</strong><br>{{ check.detail }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <a class="button ghost wide" href="/api/change-orders/{{ receipt.body.receipt_id }}" target="_blank" rel="noreferrer">Open signed JSON</a>
+    </section>
+
+    <section class="panel">
+      <h2>Why this is hard to fake</h2>
+      <ul class="plain-list">
+        <li>The issuer signature covers the canonical JSON body, not a database flag.</li>
+        <li>Every signature phrase is bound to the packet hash in the body.</li>
+        <li>A revision to any price changes the hash and invalidates earlier signatures.</li>
+        <li>The client acceptance signs the issuer's body hash, so the two parties agree on the same document.</li>
+        <li>Verification recomputes every hash and checks both Ed25519 signatures.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Cryptographic material</h2>
+      <details>
+        <summary>Issuer public key</summary>
+        <code class="break">{{ receipt.public_key }}</code>
+      </details>
+      <details>
+        <summary>Issuer signature</summary>
+        <code class="break">{{ receipt.signature }}</code>
+      </details>
+      <p class="muted small">Algorithm: {{ receipt.algorithm }} · Body hash is SHA-256 over canonical JSON.</p>
+    </section>
+  </aside>
+</div>
+
+{% endblock %}

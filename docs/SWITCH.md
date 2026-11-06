@@ -1,10 +1,10 @@
 # Switch integration
 
-Vouch is built around Switch's actual agent protocol, not a chat webhook. This
-document covers what the code speaks, how to deploy the template, and how to run
-the room by hand.
+Scope Guard is built around Switch's actual agent protocol, not a chat webhook.
+This document covers what the code speaks, how to deploy the template, and how
+to run the room by hand.
 
-## What Vouch uses
+## What Scope Guard uses
 
 Switch injects three environment variables into every managed agent:
 
@@ -43,7 +43,7 @@ ordered by timestamp.
 export SWITCH_API_ENDPOINT=https://api.switchagents.ai
 export SWITCH_API_TOKEN=...
 export SWITCH_AGENT_ID=...
-vouch switch-check
+scopeguard switch-check
 ```
 
 Output is a small JSON object:
@@ -63,15 +63,15 @@ The token is never printed. `SwitchConfig.masked_token` is available for logs.
 
 ## Deploying the room template
 
-[`templates/vouch.template.yaml`](../templates/vouch.template.yaml) is a
-standard Switch group template. It creates:
+[`templates/scopeguard.template.yaml`](../templates/scopeguard.template.yaml) is
+a standard Switch group template. It creates:
 
-- **5 agents**, account-prefixed so multiple deals can coexist:
-  `{account}-scout`, `{account}-actuary`, `{account}-examiner`,
+- **5 agents**, account-prefixed so multiple engagements can coexist:
+  `{account}-scout`, `{account}-pricer`, `{account}-redteam`,
   `{account}-clerk`, `{account}-delivery`.
-- **2 private rooms:** `deal-{account}` and `delivery-{account}`.
-- **1 link:** `deal-{account} → delivery-{account}`, labelled
-  *approved commitments*.
+- **2 private rooms:** `scope-{account}` and `delivery-{account}`.
+- **1 link:** `scope-{account} → delivery-{account}`, labelled
+  *countersigned change orders*.
 - **Kickoffs** that start the workflow in each room.
 - **Instructions** that tell each agent what it may and may not do.
 
@@ -84,25 +84,25 @@ standard Switch group template. It creates:
 
    | Param | Value |
    | --- | --- |
-   | `account` | `acme` (short, lowercase) |
-   | `vouch_root` | Absolute path to this checkout on the agent machine |
+   | `account` | `northwind` (short, lowercase) |
+   | `scopeguard_root` | Absolute path to this checkout on the agent machine |
    | `provider` | Claude Code, Codex, or OpenCode |
    | `location` | `local` or a configured host |
    | `directory` | Leave the default, or choose an agents directory |
 
-5. Deploy. Switch creates the agents, the two rooms, the link, and posts each
-   room's kickoff.
-6. Invite the humans to `deal-acme`: Priya (AE), Maya (VP Sales), Sam (Eng Lead),
-   Alex (Legal). The template invites `{$creator}` automatically; add the rest
-   through the room.
-7. Add the delivery lead to `delivery-acme`.
+5. Deploy. Switch creates the five agents, the two rooms, the link, and posts
+   each room's kickoff.
+6. Invite the humans to `scope-northwind`: Dana (account lead), Marco (delivery
+   lead), Rae (finance), and Iris (legal). The template invites `{$creator}`
+   automatically; add the rest through the room.
+7. Add the delivery lead to `delivery-northwind`.
 
 ### Template parameters
 
 | Param | Type | Notes |
 | --- | --- | --- |
 | `account` | string | Pattern `^[a-z0-9][a-z0-9-]{1,30}$`; used in names |
-| `vouch_root` | directory | The checkout the agents run the CLI from |
+| `scopeguard_root` | directory | The checkout the agents run the CLI from |
 | `provider` | provider | Defaults to the first installed of Claude, Codex, OpenCode |
 | `location` | location | Defaults to `local` |
 | `directory` | directory | Defaults to `{$agents_dir}/{agent}` |
@@ -112,89 +112,101 @@ Human users are invited with `{$creator}` rather than fabricated names.
 
 ## The room script
 
-### `deal-acme` (underwriting)
+### `scope-northwind` (change order)
 
-**Purpose:** turn asks into evidence-backed commitments and obtain exact human
-approvals bound to one packet hash.
+**Purpose:** turn asks into evidence-backed, priced line items and obtain exact
+human signatures bound to one packet hash before the client countersigns.
 
-**Members:** Priya, Maya, Sam, Alex, plus Scout, Actuary, Examiner, Clerk.
+**Members:** Dana, Marco, Rae, Iris, plus Scout, Pricer, Red Team, Clerk.
 
 **Agent powers:**
 
 | Agent | May | May not |
 | --- | --- | --- |
-| Scout | Read deal/evidence, post evidence tables, say "no evidence" | Invent a date, certification, or number |
-| Actuary | Run `vouch assess`, explain verdicts and policy refs | Approve, soften a refusal, invent a number |
-| Examiner | Run `vouch challenge`, block, propose remediation | Approve, seal, or issue a receipt |
-| Clerk | Record exact phrases, report gate, seal, hand off | Decide a commercial question or invent approval |
+| Scout | Read engagement/evidence, post evidence tables, say "no evidence" | Invent a date, capability, rate, or contract term |
+| Pricer | Run `scopeguard assess`, explain verdicts, amounts, and policy refs | Sign, soften a refusal, invent a number |
+| Red Team | Run `scopeguard challenge`, block, propose remediation | Sign, seal, or issue a change order |
+| Clerk | Record exact phrases, report the gate, seal, countersign, hand off | Decide a commercial question or invent a signature |
 
 **Canonical sequence:**
 
 ```
-Priya:   Acme will not sign without SSO, 99.95% SLA, SOC 2 Type II, and 20% off.
-Scout:   [evidence table: SSO beta 2026-12-15 / GA Q1 2027; 99.92% observed;
-          SOC 2 in progress, report 2027-01-15; list $240k, cost 55%]
-Actuary: Packet v1 c232e989… — SSO narrow, SLA narrow, DISC approve 20%, SOC2 narrow.
-Priya:   APPROVE ACME-2026 DISC AS AE
-Maya:    APPROVE ACME-2026 DISC AS VP_SALES
-Examiner: BLOCK. discount_autonomy (20% > 15%) and margin_floor (31.25% < 33%).
-Actuary: Revised to v2 0f8fe1ab… — DISC narrow 15%. Earlier approvals are stale.
-Priya:   APPROVE ACME-2026 DISC AS AE
-Maya:    APPROVE ACME-2026 DISC AS VP_SALES
-Sam:     APPROVE ACME-2026 SSO AS ENG_LEAD
-Sam:     APPROVE ACME-2026 SLA AS ENG_LEAD
-Alex:    APPROVE ACME-2026 SOC2 AS LEGAL
-Priya:   APPROVE ACME-2026 SSO AS AE
-Priya:   APPROVE ACME-2026 SLA AS AE
-Priya:   APPROVE ACME-2026 SOC2 AS AE
-Maya:    VOUCH SEAL
-Clerk:   Receipt vch_… issued. Verify: vouch verify --receipt vch_…
+Dana:    Northwind wants a mobile app, a two-week pull-in, 20% off, and
+         unlimited liability. They need an answer today.
+Scout:   [evidence table: beta 2026-12-01 / GA Q1 2027; 1 week of capacity at
+         88%; 58% cost ratio; 2x liability cap; unlimited not insurable]
+Pricer:  Packet v1 ed19403e… — MOBILE narrow 30,000; RUSH narrow 12,000;
+         RATE approve 20% -9,600; TERMS narrow 6,000. Total 38,400.
+Dana:    SIGN NORTHWIND-2026 RATE AS ACCOUNT_LEAD
+Rae:     SIGN NORTHWIND-2026 RATE AS FINANCE
+Red Team: BLOCK. rate_autonomy (20% > 12%) and margin_floor (27.50% < 30%).
+Pricer:  Revised to v2 2d3f8963… — RATE narrow 12%. Earlier signatures are stale.
+Dana:    SIGN NORTHWIND-2026 RATE AS ACCOUNT_LEAD
+Rae:     SIGN NORTHWIND-2026 RATE AS FINANCE
+Dana:    SIGN NORTHWIND-2026 MOBILE AS ACCOUNT_LEAD
+Marco:   SIGN NORTHWIND-2026 MOBILE AS DELIVERY_LEAD
+Dana:    SIGN NORTHWIND-2026 RUSH AS ACCOUNT_LEAD
+Marco:   SIGN NORTHWIND-2026 RUSH AS DELIVERY_LEAD
+Dana:    SIGN NORTHWIND-2026 TERMS AS ACCOUNT_LEAD
+Iris:    SIGN NORTHWIND-2026 TERMS AS LEGAL
+Dana:    SCOPE SEAL
+Clerk:   Sealed. Change order co_5d7602a7… Total 42,240.00 USD.
+         Client, reply `SCOPE ACCEPT <your name>` to countersign.
+Jordan:  SCOPE ACCEPT Jordan Reyes
+Clerk:   Accepted by Jordan Reyes. Change order is now two-party signed.
+         Signed change order handed to delivery-northwind.
 ```
 
-Anything that is not exactly `APPROVE <DEAL> <CLAIM> AS <ROLE>` is ignored. A
-message from someone who does not hold the role is rejected. A message bound to
-an old hash is stale and does not count.
+Anything that is not exactly `SIGN <ENGAGEMENT> <REQUEST> AS <ROLE>` is ignored.
+A message from someone who does not hold the role is rejected. A message bound
+to an old hash is stale and does not count. A bot's summary is not a signature.
 
-### `delivery-acme` (handoff)
+### `delivery-northwind` (handoff)
 
-**Purpose:** receive only approved commitments, restate them as work, and refuse
-anything that is not in the receipt.
+**Purpose:** receive only countersigned line items, restate them as work, and
+refuse anything that is not in the change order.
 
 **Members:** delivery lead, Delivery agent, Clerk.
 
 **What the Clerk posts:**
 
-```
-**Vouch handoff: Acme Corp (acme-2026)**
+```markdown
+**Scope Guard handoff: Northwind Health (northwind-2026)**
 
-Receipt: `vch_072ab073fdc4bcab3a226d9a`
-Packet: v2 / `0f8fe1ab6a766d8a...`
-Policy: `deal-policy-v1@v1`
+Change order: `co_5d7602a73cba86de6db28804`
+Packet: v2 / `2d3f89633746db1f...`
+Policy: `scope-policy-v1@v1`
+Status: Countersigned by Jordan Reyes
+Total: **42,240.00 USD** (subtotal 48,000.00, discount -5,760.00)
 
-**Approved commitments**
-- **SSO** — beta by 2026-12-15; GA targeted Q1 2027, not committed.
-  - Condition: Customer-facing language must say beta, not generally available.
+**Signed line items**
+- **MOBILE** - beta by 2026-12-01; GA targeted Q1 2027, not included. (+30,000.00 USD)
+  - Condition: Scope is the beta build only; GA is a separate change order.
   ...
-Only the commitments above leave this room. Anything not listed is not approved.
-Verify: `vouch verify --receipt vch_...`
+- **RATE** - 12.00% discount on this change order. (-5,760.00 USD)
+  ...
+
+Only the line items above leave this room. Anything not listed is not approved.
+Verify: `scopeguard verify --receipt co_5d7602a73cba86de6db28804`
 ```
 
-The Delivery agent's instructions say the signed receipt is the only authority.
-A verbal promise, a draft packet, or "sales said it was fine" is not authority.
+The Delivery agent's instructions say the two-party-signed change order is the
+only authority. A verbal promise, a draft packet, or "sales said it was fine" is
+not authority.
 
 ## Running the headless Clerk
 
 The deterministic Clerk is an ordinary Switch participant. It is useful when a
-team wants Vouch's last mile to work without an LLM, and it is what the tests
-exercise.
+team wants Scope Guard's last mile to work without an LLM, and it is what the
+tests exercise.
 
 ```bash
 export SWITCH_API_ENDPOINT=...
 export SWITCH_API_TOKEN=...
 export SWITCH_AGENT_ID=...          # the {account}-clerk agent
-vouch clerk \
-  --deal acme-2026 \
-  --room-id <deal-room-id> \
+scopeguard clerk \
+  --engagement northwind-2026 \
+  --room-id <scope-room-id> \
   --delivery-room-id <delivery-room-id> \
   --interval 3
 ```
@@ -202,27 +214,36 @@ vouch clerk \
 One pass for a script or a cron job:
 
 ```bash
-vouch clerk --deal acme-2026 --room-id <deal-room-id> \
+scopeguard clerk --engagement northwind-2026 --room-id <scope-room-id> \
   --delivery-room-id <delivery-room-id> --once
 ```
 
 What a pass does:
 
-1. `read_context` the deal room.
+1. `read_context` the scope room.
 2. Parse only unseen messages.
-3. For each exact approval: validate sender role, claim, role, packet hash;
-   record valid ones; report rejected ones.
-4. `VOUCH SEAL` triggers a gate check; if clear, seal and post the receipt id.
-5. If a delivery room is bound, post the handoff once.
-6. Post a compact status with the packet hash, valid pairs, stale pairs, and
-   pending pairs.
+3. For each exact signature: validate sender role, request, role, and packet
+   hash; record valid ones; report rejected ones.
+4. `SCOPE SEAL` triggers a gate check; if clear, seal and post the change-order
+   id.
+5. `SCOPE ACCEPT <name>` records the client's countersignature.
+6. If a delivery room is bound, post the handoff once, after acceptance.
+7. Post a compact status with the packet hash, valid pairs, stale pairs, and
+   pending pairs when asked for `SCOPE STATUS`.
 
-It never invents an approval and never decides a commercial question.
+It never invents a signature and never decides a commercial question.
+
+The countersignature uses the client key at
+`$SCOPE_HOME/keys/client-ed25519.pem` (`~/.scopeguard` by default, or the
+`--home` directory). In a real deployment the client's key lives with the
+client; the bundled flow keeps it in the same home so the demo can run offline.
+The verification model is the same either way: the client signs the issuer's
+body hash, and the two keys are distinct.
 
 ## Local Switch stack (optional)
 
-The upstream repository ships a Docker-based local stack. Vouch does not need
-it for the demo, but a fully local end-to-end run is possible:
+The upstream repository ships a Docker-based local stack. Scope Guard does not
+need it for the demo, but a fully local end-to-end run is possible:
 
 1. Clone the Switch repository and follow its local deployment instructions.
 2. Point `SWITCH_API_ENDPOINT` at the local gateway.
@@ -235,10 +256,10 @@ and bootstrap steps; they change often, so this repository does not pin them.
 ## Protocol notes
 
 - Auth is `Authorization: Bearer <api_key>`. A missing key is a `401`.
-- A room the agent is not in returns `403`. Vouch surfaces the HTTP status and a
-  hint rather than retrying.
-- `read_context` pages history. Vouch asks for `limit=100`; the Clerk keeps a
-  `seen` set so repeated passes do not double-record.
+- A room the agent is not in returns `403`. Scope Guard surfaces the HTTP status
+  and a hint rather than retrying.
+- `read_context` pages history. Scope Guard asks for `limit=100`; the Clerk keeps
+  a `seen` set so repeated passes do not double-record.
 - `post_message` is direct and does not need the WebSocket. This is what makes
   the headless path deterministic.
 - Message timestamps are milliseconds since the epoch.
@@ -249,6 +270,6 @@ and bootstrap steps; they change often, so this repository does not pin them.
 
 The bundled demo injects a `FakeSwitch` with the same two-method surface as the
 real client. That is a transport substitution, not a workflow substitution: the
-same `Clerk`, `VouchService`, gate, receipt, and policy code runs. The real
+same `Clerk`, `ScopeService`, gate, change order, and policy code runs. The real
 client is covered by tests that assert the exact paths, headers, payloads, and
 error handling. See [VALIDITY.md](VALIDITY.md).

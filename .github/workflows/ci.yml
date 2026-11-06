@@ -43,4 +43,4 @@ jobs:
         run: python -m pytest -q
 
       - name: Offline demo
-        run: vouch demo --reset --no-write
+        run: scopeguard demo --reset --no-write

@@ -3,14 +3,14 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vouch"
+name = "scopeguard"
 version = "1.0.0"
 description = "Commitment underwriting for B2B sales promises, with humans and agents working a Switch room."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "Vouch" }]
+authors = [{ name = "Scope Guard" }]
 keywords = ["switch", "agents", "sales", "governance", "receipts", "approvals"]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -43,13 +43,13 @@ dev = [
 ]
 
 [project.scripts]
-vouch = "vouch.cli:main"
+scopeguard = "scopeguard.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-vouch = ["api/templates/*.html", "api/static/*.css", "api/static/*.svg"]
+scopeguard = ["api/templates/*.html", "api/static/*.css", "api/static/*.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -57,7 +57,7 @@ addopts = "-q"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 asyncio_default_test_loop_scope = "function"
-filterwarnings = ["error::DeprecationWarning:vouch.*"]
+filterwarnings = ["error::DeprecationWarning:scopeguard.*"]
 
 [tool.ruff]
 line-length = 100
@@ -77,7 +77,7 @@ ignore = [
 "tests/*" = ["B011"]
 # FastAPI's dependency injection is expressed in argument defaults; that is
 # the framework's documented pattern, not a mutable-default bug.
-"src/vouch/api/app.py" = ["B008"]
+"src/scopeguard/api/app.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -85,7 +85,7 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 check_untyped_defs = true
 ignore_missing_imports = true
-files = ["src/vouch"]
+files = ["src/scopeguard"]
 
 [tool.coverage.run]
-source = ["vouch"]
+source = ["scopeguard"]

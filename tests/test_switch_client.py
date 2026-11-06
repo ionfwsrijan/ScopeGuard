@@ -7,8 +7,8 @@ import json
 import httpx
 import pytest
 
-from vouch.errors import SwitchError
-from vouch.switch.client import SwitchClient, SwitchConfig, messages_from_context
+from scopeguard.errors import SwitchError
+from scopeguard.switch.client import SwitchClient, SwitchConfig, messages_from_context
 
 CONFIG = SwitchConfig(
     endpoint="https://switch.example.test",
@@ -85,7 +85,7 @@ def test_check_reads_the_operation_catalogue() -> None:
     assert seen[0].method == "GET"
     assert seen[0].url.path == "/agents/agent_clerk/ops"
     assert seen[0].headers["authorization"] == "Bearer sw_live_1234567890"
-    assert seen[0].headers["user-agent"] == "vouch/1.0"
+    assert seen[0].headers["user-agent"] == "scopeguard/1.0"
 
 
 def test_read_context_posts_arguments_and_room_header() -> None:

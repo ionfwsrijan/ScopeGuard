@@ -1,0 +1,60 @@
+engagement_id: northwind-2026
+evidence:
+  - id: EV-MOBILE-1
+    request_id: MOBILE
+    kind: estimate
+    source: "Delivery estimate, Miro board EST-114 (owner: Marco)"
+    observed_at: 2026-11-01
+    valid_until: 2026-12-15
+    summary: "A beta build is 200 hours; GA needs 320 hours and lands in Q1 2027."
+    payload:
+      hours: 320
+      beta_hours: 200
+      rate: 150
+      beta_date: 2026-12-01
+      ga_date: 2027-03-15
+      ga_quarter: Q1 2027
+      confidence: committed-beta
+
+  - id: EV-RUSH-1
+    request_id: RUSH
+    kind: capacity
+    source: "Staffing plan and velocity report, week of 2026-11-02"
+    observed_at: 2026-11-02
+    valid_until: 2026-11-30
+    summary: "One week of acceleration is supportable at 88% confidence; two weeks is not."
+    payload:
+      rush_hours: 64
+      rate: 150
+      premium_pct: 25
+      confidence_pct: 88
+      supported_weeks: 1
+      team_available: 2.5
+
+  - id: EV-RATE-1
+    request_id: RATE
+    kind: rate_card
+    source: "FY26 services rate card and margin model (owner: Rae)"
+    observed_at: 2026-11-01
+    valid_until: 2026-12-31
+    summary: "Blended rate is $150/hour; delivery cost ratio is 58%; margin floor is 30%."
+    payload:
+      hourly_rate: 150
+      cost_ratio_pct: 58
+      margin_floor_pct: 30
+      max_discount_pct: 20
+
+  - id: EV-TERMS-1
+    request_id: TERMS
+    kind: contract
+    source: "Master services agreement, sections 9 and 12 (owner: Iris)"
+    observed_at: 2026-10-28
+    valid_until: 2026-12-31
+    summary: "Standard liability is 1x fees; policy allows 2x. Unlimited liability is not insurable."
+    payload:
+      standard_liability_multiple: 1
+      max_liability_multiple: 2
+      review_hours: 40
+      rate: 150
+      custom_security_addendum: true
+      insurance_limit: 2000000

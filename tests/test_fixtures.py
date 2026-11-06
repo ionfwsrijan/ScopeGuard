@@ -6,49 +6,67 @@ from pathlib import Path
 
 import pytest
 
-from vouch.fixtures import (
+from scopeguard.fixtures import (
     FixtureError,
     load_approvers,
-    load_claims_document,
-    load_deal,
+    load_engagement,
     load_evidence,
     load_messages,
+    load_requests_document,
 )
 
-REQUEST = """
-deal:
+ENGAGEMENT = """
+engagement:
   id: acme-2026
-  account: Acme Corp
-  requested_by: Priya
-  annual_list_price: 240000
-  cost_ratio_pct: 55
-  claims:
-    - id: SSO
-      type: feature
-      title: SSO
-      requested_text: "SSO generally available by 2026-12-31."
-      requested_value: {ga_date: 2026-12-31}
-      due: 2026-12-31
+  client: Acme Corp
+  requested_by: Dana
+  contract_value: 120000
+  delivery_cost_ratio_pct: 58
+  requests:
+    - id: MOBILE
+      type: new_work
+      title: Native mobile app
+      requested_text: "A native mobile app by launch."
+      requested_value: {ga_date: 2026-12-15}
+      due: 2026-12-15
+    - id: RATE
+      type: rate
+      title: Discount
+      requested_text: "20% off."
+      requested_value: {discount_pct: 20}
+"""
+
+BARE_ENGAGEMENT = """
+id: acme-2026
+client: Acme Corp
+requested_by: Dana
+contract_value: 120000
+delivery_cost_ratio_pct: 58
+requests:
+  - id: MOBILE
+    type: new_work
+    title: Native mobile app
+    requested_text: "A native mobile app by launch."
 """
 
 EVIDENCE = """
-deal_id: acme-2026
+engagement_id: acme-2026
 evidence:
-  - id: EV-SSO-1
-    claim_id: SSO
-    kind: roadmap
-    source: "Product roadmap"
-    observed_at: 2026-10-24
-    valid_until: 2026-12-31
+  - id: EV-MOBILE-1
+    request_id: MOBILE
+    kind: estimate
+    source: "Delivery estimate"
+    observed_at: 2026-11-01
+    valid_until: 2026-12-15
     summary: "Beta in December, GA in Q1."
-    payload: {beta_date: 2026-12-15, ga_date: 2027-03-31}
+    payload: {hours: 320, rate: 150}
 """
 
 APPROVERS = """
-deal_id: acme-2026
+engagement_id: acme-2026
 roles:
-  AE: [Priya]
-  ENG_LEAD: [Sam]
+  ACCOUNT_LEAD: [Dana]
+  DELIVERY_LEAD: [Marco]
 """
 
 
@@ -58,54 +76,64 @@ def write(tmp_path: Path, name: str, text: str) -> Path:
     return path
 
 
-def test_repository_deal_fixture(repo_root: Path) -> None:
-    deal = load_deal(repo_root / "fixtures" / "acme" / "request.yaml")
-    assert deal.id == "acme-2026"
-    assert deal.account == "Acme Corp"
-    assert [claim.id for claim in deal.claims] == ["SSO", "SLA", "DISC", "SOC2"]
-    assert deal.claims[2].requested_value["discount_pct"] == 20
+# ---------------------------------------------------------------- repository
+def test_repository_engagement_fixture(repo_root: Path) -> None:
+    engagement = load_engagement(repo_root / "fixtures" / "northwind" / "engagement.yaml")
+    assert engagement.id == "northwind-2026"
+    assert engagement.client == "Northwind Health"
+    assert [request.id for request in engagement.requests] == [
+        "MOBILE",
+        "RUSH",
+        "RATE",
+        "TERMS",
+    ]
+    assert engagement.request("rate").requested_value["discount_pct"] == 20
+    assert engagement.request("terms").requested_value["unlimited_liability"] is True
 
 
 def test_repository_evidence_fixture(repo_root: Path) -> None:
-    deal = load_deal(repo_root / "fixtures" / "acme" / "request.yaml")
-    book = load_evidence(repo_root / "fixtures" / "acme" / "evidence.yaml", deal)
+    engagement = load_engagement(repo_root / "fixtures" / "northwind" / "engagement.yaml")
+    book = load_evidence(repo_root / "fixtures" / "northwind" / "evidence.yaml", engagement)
     assert len(book.items) == 4
     assert all(len(item.digest) == 64 for item in book.items)
-    assert {item.claim_id for item in book.items} == {"SSO", "SLA", "DISC", "SOC2"}
+    assert {item.request_id for item in book.items} == {"MOBILE", "RUSH", "RATE", "TERMS"}
 
 
 def test_repository_approver_fixture(repo_root: Path) -> None:
-    approvers = load_approvers(repo_root / "fixtures" / "acme" / "approvers.yaml")
-    assert approvers.deal_id == "acme-2026"
-    assert approvers.can_hold("Priya", "AE")
-    assert not approvers.can_hold("Priya", "LEGAL")
+    approvers = load_approvers(repo_root / "fixtures" / "northwind" / "approvers.yaml")
+    assert approvers.engagement_id == "northwind-2026"
+    assert approvers.can_hold("Dana", "ACCOUNT_LEAD")
+    assert not approvers.can_hold("Dana", "LEGAL")
+    assert approvers.role_for("iris") == "LEGAL"
+    assert approvers.all_roles() == ["ACCOUNT_LEAD", "DELIVERY_LEAD", "FINANCE", "LEGAL"]
 
 
 def test_repository_message_fixture(repo_root: Path) -> None:
-    messages = load_messages(repo_root / "fixtures" / "acme" / "switch_messages.yaml")
-    assert len(messages) == 14
-    assert messages[0].sender_name == "Priya"
-    assert sum("APPROVE" in item.body for item in messages) == 10
+    messages = load_messages(repo_root / "fixtures" / "northwind" / "switch_messages.yaml")
+    assert len(messages) == 15
+    assert messages[0].sender_name == "Dana"
+    assert str(messages[0].room_id) == "room-northwind-scope"
+    assert sum("SIGN" in item.body for item in messages) == 10
+    assert messages[-1].body == "SCOPE SEAL"
 
 
-def test_load_deal_accepts_bare_mapping(tmp_path: Path) -> None:
-    text = REQUEST.replace("deal:\n", "").replace("\n  ", "\n")
-    # A bare mapping would need different indentation; use the wrapped form here
-    # and verify a direct payload separately.
-    deal = load_deal(write(tmp_path, "request.yaml", REQUEST))
-    assert deal.claims[0].id == "SSO"
-    del text
+# ------------------------------------------------------------------- loading
+def test_load_engagement_accepts_a_wrapped_or_bare_mapping(tmp_path: Path) -> None:
+    wrapped = load_engagement(write(tmp_path, "wrapped.yaml", ENGAGEMENT))
+    bare = load_engagement(write(tmp_path, "bare.yaml", BARE_ENGAGEMENT))
+    assert wrapped.requests[0].id == bare.requests[0].id == "MOBILE"
+    assert wrapped.client == bare.client == "Acme Corp"
 
 
-def test_load_deal_rejects_invalid_payload(tmp_path: Path) -> None:
+def test_load_engagement_rejects_invalid_payload(tmp_path: Path) -> None:
     with pytest.raises(FixtureError) as info:
-        load_deal(write(tmp_path, "request.yaml", "deal: {id: X}\n"))
-    assert "invalid deal fixture" in info.value.message
+        load_engagement(write(tmp_path, "engagement.yaml", "engagement: {id: X}\n"))
+    assert "invalid engagement fixture" in info.value.message
 
 
 def test_missing_fixture_is_clear(tmp_path: Path) -> None:
     with pytest.raises(FixtureError) as info:
-        load_deal(tmp_path / "missing.yaml")
+        load_engagement(tmp_path / "missing.yaml")
     assert "not found" in info.value.message
 
 
@@ -115,37 +143,45 @@ def test_invalid_yaml_is_clear(tmp_path: Path) -> None:
     assert "invalid YAML" in info.value.message
 
 
+def test_non_mapping_yaml_is_clear(tmp_path: Path) -> None:
+    with pytest.raises(FixtureError) as info:
+        load_engagement(write(tmp_path, "engagement.yaml", "- one\n- two\n"))
+    assert "mapping" in info.value.message
+
+
+# ------------------------------------------------------------------ evidence
 def test_evidence_requires_a_list(tmp_path: Path) -> None:
     with pytest.raises(FixtureError) as info:
-        load_evidence(write(tmp_path, "evidence.yaml", "deal_id: acme-2026\nevidence: nope\n"))
+        load_evidence(
+            write(tmp_path, "evidence.yaml", "engagement_id: acme-2026\nevidence: nope\n")
+        )
     assert "must be a list" in info.value.message
 
 
-def test_evidence_deal_id_must_match(tmp_path: Path) -> None:
-    deal = load_deal(write(tmp_path, "request.yaml", REQUEST))
-    text = EVIDENCE.replace("deal_id: acme-2026", "deal_id: other")
+def test_evidence_engagement_id_must_match(tmp_path: Path) -> None:
+    engagement = load_engagement(write(tmp_path, "engagement.yaml", ENGAGEMENT))
+    text = EVIDENCE.replace("engagement_id: acme-2026", "engagement_id: other")
     with pytest.raises(FixtureError) as info:
-        load_evidence(write(tmp_path, "evidence.yaml", text), deal)
+        load_evidence(write(tmp_path, "evidence.yaml", text), engagement)
     assert "does not match" in info.value.message
 
 
-def test_evidence_claim_must_exist(tmp_path: Path) -> None:
-    deal = load_deal(write(tmp_path, "request.yaml", REQUEST))
-    text = EVIDENCE.replace("claim_id: SSO", "claim_id: NOPE")
+def test_evidence_request_must_exist(tmp_path: Path) -> None:
+    engagement = load_engagement(write(tmp_path, "engagement.yaml", ENGAGEMENT))
+    text = EVIDENCE.replace("request_id: MOBILE", "request_id: NOPE")
     with pytest.raises(FixtureError) as info:
-        load_evidence(write(tmp_path, "evidence.yaml", text), deal)
-    assert "unknown claims" in info.value.message
+        load_evidence(write(tmp_path, "evidence.yaml", text), engagement)
+    assert "unknown requests" in info.value.message
 
 
 def test_duplicate_evidence_ids_are_rejected(tmp_path: Path) -> None:
     text = (
         EVIDENCE
-        + """
-  - id: EV-SSO-1
-    claim_id: SSO
+        + """  - id: EV-MOBILE-1
+    request_id: MOBILE
     kind: note
     source: "duplicate"
-    observed_at: 2026-10-24
+    observed_at: 2026-11-01
     summary: "duplicate"
 """
     )
@@ -159,27 +195,29 @@ def test_evidence_digest_is_computed_on_load(tmp_path: Path) -> None:
     assert book.items[0].digest == book.items[0].computed_digest()
 
 
-def test_approver_deal_id_must_match(tmp_path: Path) -> None:
-    deal = load_deal(write(tmp_path, "request.yaml", REQUEST))
-    text = APPROVERS.replace("deal_id: acme-2026", "deal_id: other")
+# ------------------------------------------------------------------ approvers
+def test_approver_engagement_id_must_match(tmp_path: Path) -> None:
+    engagement = load_engagement(write(tmp_path, "engagement.yaml", ENGAGEMENT))
+    text = APPROVERS.replace("engagement_id: acme-2026", "engagement_id: other")
     with pytest.raises(FixtureError) as info:
-        load_approvers(write(tmp_path, "approvers.yaml", text), deal)
+        load_approvers(write(tmp_path, "approvers.yaml", text), engagement)
     assert "does not match" in info.value.message
 
 
 def test_approver_role_needs_a_named_person(tmp_path: Path) -> None:
-    text = APPROVERS.replace("  AE: [Priya]", "  AE: []")
+    text = APPROVERS.replace("ACCOUNT_LEAD: [Dana]", "ACCOUNT_LEAD: []")
     with pytest.raises(FixtureError) as info:
         load_approvers(write(tmp_path, "approvers.yaml", text))
     assert "at least one named person" in info.value.message
 
 
+# ------------------------------------------------------------------- messages
 def test_message_fixture_defaults_room(tmp_path: Path) -> None:
     text = """
 messages:
   - id: m1
-    sender_name: Priya
-    body: "APPROVE ACME-2026 SSO AS AE"
+    sender_name: Dana
+    body: "SIGN NORTHWIND-2026 MOBILE AS ACCOUNT_LEAD"
     timestamp_ms: 0
 """
     messages = load_messages(write(tmp_path, "messages.yaml", text))
@@ -190,27 +228,28 @@ def test_message_fixture_rejects_unknown_fields(tmp_path: Path) -> None:
     text = """
 messages:
   - id: m1
-    sender_name: Priya
-    body: "hi"
+    sender_name: Dana
+    body: "hello"
     surprise: true
 """
     with pytest.raises(FixtureError):
         load_messages(write(tmp_path, "messages.yaml", text))
 
 
-def test_claims_document(tmp_path: Path) -> None:
+# ------------------------------------------------------------------- requests
+def test_requests_document(tmp_path: Path) -> None:
     text = """
-claims:
-  - id: SSO
-    type: feature
-    title: SSO
-    requested_text: "SSO by 2026-12-31."
+requests:
+  - id: MOBILE
+    type: new_work
+    title: Native mobile app
+    requested_text: "Native mobile app by launch."
 """
-    claims = load_claims_document(write(tmp_path, "claims.yaml", text))
-    assert claims[0].id == "SSO"
+    requests = load_requests_document(write(tmp_path, "requests.yaml", text))
+    assert requests[0].id == "MOBILE"
 
 
-def test_claims_document_requires_a_list(tmp_path: Path) -> None:
+def test_requests_document_requires_a_list(tmp_path: Path) -> None:
     with pytest.raises(FixtureError) as info:
-        load_claims_document(write(tmp_path, "claims.yaml", "claims: nope\n"))
+        load_requests_document(write(tmp_path, "requests.yaml", "requests: nope\n"))
     assert "must be a list" in info.value.message

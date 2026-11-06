@@ -1,9 +1,0 @@
-# Who may hold each approval role. These names are matched to the sender name
-# of a Switch message. A Switch room role is not an approval; a named person
-# holding the role, saying the exact phrase, bound to a packet hash, is.
-deal_id: acme-2026
-roles:
-  AE: [Priya]
-  VP_SALES: [Maya]
-  ENG_LEAD: [Sam]
-  LEGAL: [Alex]
