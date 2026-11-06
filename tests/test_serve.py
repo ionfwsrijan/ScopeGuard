@@ -98,9 +98,7 @@ def test_the_demo_ledger_is_usable_without_a_home_argument(tmp_path: Path) -> No
     home = tmp_path / "demo-home"
     run_demo(root=ROOT, home=home, write=None, console=cli.Console())
     paths = ScopePaths.discover(root=ROOT, home=home, fixture="northwind")
-    service = ScopeService.open(
-        paths, now=fixed_clock(datetime(2026, 11, 4, 12, 0, tzinfo=UTC))
-    )
+    service = ScopeService.open(paths, now=fixed_clock(datetime(2026, 11, 4, 12, 0, tzinfo=UTC)))
     try:
         assert service.store.list_receipts("northwind-2026")
     finally:

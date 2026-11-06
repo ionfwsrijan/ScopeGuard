@@ -26,9 +26,7 @@ PLACEHOLDER_RE = re.compile(r"\{(\$?[A-Za-z_][A-Za-z0-9_]*)\}")
 BUILTINS = frozenset({"$creator", "$creator_email", "$date", "$timestamp", "$agents_dir"})
 PARAM_TYPES = frozenset({"string", "directory", "provider", "location"})
 REQUIRED_AGENTS = ("scout", "pricer", "redteam", "clerk", "delivery")
-KNOWN_TOP_LEVEL = frozenset(
-    {"version", "params", "agents", "group", "rooms", "links", "kickoff"}
-)
+KNOWN_TOP_LEVEL = frozenset({"version", "params", "agents", "group", "rooms", "links", "kickoff"})
 
 
 @dataclass(frozen=True)
@@ -111,9 +109,7 @@ def _check_params(document: dict[str, Any], report: TemplateReport) -> set[str]:
     return declared
 
 
-def _check_agents(
-    document: dict[str, Any], report: TemplateReport
-) -> dict[str, dict[str, Any]]:
+def _check_agents(document: dict[str, Any], report: TemplateReport) -> dict[str, dict[str, Any]]:
     raw = document.get("agents")
     if not isinstance(raw, list) or not raw:
         report.add("agents_missing", "the template must create the Scope Guard agents")
@@ -135,9 +131,7 @@ def _check_agents(
         instructions = item.get("instructions")
         if not isinstance(instructions, str) or len(instructions.strip()) < 80:
             report.add("agent_instructions", f"agent {name!r} needs real instructions")
-    roles = {
-        name.removeprefix("{account}-") for name in agents if name.startswith("{account}-")
-    }
+    roles = {name.removeprefix("{account}-") for name in agents if name.startswith("{account}-")}
     missing = [role for role in REQUIRED_AGENTS if role not in roles]
     if missing:
         report.add("agent_roles", f"missing agent roles: {', '.join(missing)}")
@@ -219,9 +213,7 @@ def _check_placeholders(
     # Inside an agent entry, ``{agent}`` is that entry's own name.
     for entry in agent_entries if isinstance(agent_entries, list) else []:
         entry_text = _strings(entry)
-        entry_used = {
-            match for text in entry_text for match in PLACEHOLDER_RE.findall(text)
-        }
+        entry_used = {match for text in entry_text for match in PLACEHOLDER_RE.findall(text)}
         entry_used.discard("agent")
         used.update(entry_used)
     used -= {name for name in used if name.startswith("$")}
@@ -252,7 +244,9 @@ def _check_workflow_text(document: dict[str, Any], report: TemplateReport) -> No
             "the template must tell the issuer to record the acceptance artifact",
         )
     if "scopeguard verify" not in text:
-        report.add("verification_text", "the template must tell delivery to verify the change order")
+        report.add(
+            "verification_text", "the template must tell delivery to verify the change order"
+        )
 
 
 def validate_document(document: Any) -> TemplateReport:

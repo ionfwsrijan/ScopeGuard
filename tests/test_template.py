@@ -23,7 +23,9 @@ def test_the_shipped_template_passes_every_structural_check() -> None:
 
 
 def test_the_shipped_template_passes_switches_own_linter() -> None:
-    result = upstream_lint(TEMPLATE.read_text(encoding="utf-8"), ROOT / ".reference-switch" / "core")
+    result = upstream_lint(
+        TEMPLATE.read_text(encoding="utf-8"), ROOT / ".reference-switch" / "core"
+    )
     assert result == "passed" or result.startswith("skipped: .reference-switch"), result
 
 
