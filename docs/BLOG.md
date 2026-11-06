@@ -77,7 +77,9 @@ scopeguard assess    --engagement northwind-2026
 scopeguard challenge --engagement northwind-2026
 scopeguard sync      --engagement northwind-2026 --room-id <room>
 scopeguard seal      --engagement northwind-2026
-scopeguard countersign --engagement northwind-2026 --client "Jordan Reyes"
+scopeguard register-client --engagement northwind-2026 --client "Jordan Reyes" --public-key jordan.pub
+scopeguard client-accept --receipt receipt.json --client "Jordan Reyes" --key jordan.pem
+scopeguard countersign --engagement northwind-2026 --token "<token from client-accept>"
 scopeguard handoff   --engagement northwind-2026 --post <delivery-room>
 ```
 

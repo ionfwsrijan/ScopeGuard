@@ -56,7 +56,7 @@ engagement + evidence + policy ─► assess ─► Packet v1 (hash H1)
                                                │
                               client countersigns the body hash
                                                │
-                                            verify (up to 19 checks)
+                                            verify (up to 22 checks)
                                                │
                                             handoff → delivery room
 ```
@@ -194,8 +194,8 @@ phrase in a bot's summary is not a signature.
 4. Signs the body hash with Ed25519.
 5. Embeds the issuer's public key so the artifact is self-contained.
 6. Links `chain_prev` to the previous change order for the engagement.
-7. Optionally records a client acceptance: a second Ed25519 signature over
-   `canonical_json({"body_hash", "issuer", "public_key"})`.
+7. Records client acceptance as a second Ed25519 signature over the receipt
+   id, body hash, signer name, public key, and acceptance timestamp.
 
 The countersignature is deliberately over the issuer's **body hash**, not over
 the client's copy of the body. If the body changes, the hash changes and the
@@ -219,12 +219,15 @@ from the serialized body and then optionally cross-checks the local ledger:
 | `unexpired` | Optional: the change order has not expired |
 | `acceptance_present` | Optional: the client countersigned |
 | `acceptance_algorithm` | The client uses Ed25519 |
+| `acceptance_receipt_binding` | Acceptance names this change order |
+| `acceptance_body_hash_binding` | Acceptance names this exact body hash |
 | `acceptance_key_distinct` | The client key is not the issuer key |
-| `acceptance` | The client signature covers this body hash |
+| `acceptance` | The client signature covers the receipt id and body hash |
 | `pinned_client_key` | Optional: the client key matches a trusted local key |
 | `packet_rehash` | The local packet still hashes to the recorded packet hash |
 | `packet_version` | The change order binds the packet version it claims |
 | `line_items_match_packet` | The change order line items match the packet |
+| `client_registered` | The signer and key match the out-of-band client registration |
 | `recorded` | The change order exists in the local ledger |
 
 `packet_present` is added when a standalone verifier does not have the local

@@ -321,12 +321,26 @@ class ReceiptLineItem(Model):
 
 
 class Acceptance(Model):
-    """A client's countersignature over the issuer's signed body hash."""
+    """A client's countersignature over one exact change order.
+
+    Unlike the issuer signature, this artifact is produced on the client's
+    machine with a key the issuer never holds. It binds the named signer and
+    public key to the receipt id, the issuer's body hash, and the moment of
+    acceptance. The Clerk only ever sees the public key and the signature.
+    """
 
     issuer: str = Field(min_length=1, max_length=200)
     public_key: str = Field(min_length=1)
     signature: str = Field(min_length=1)
+    receipt_id: str = Field(min_length=1)
+    body_hash: str = Field(min_length=1)
+    accepted_at: datetime
     algorithm: str = "Ed25519"
+
+    @field_validator("accepted_at")
+    @classmethod
+    def _aware(cls, value: datetime) -> datetime:
+        return _utc(value)
 
 
 class ReceiptBody(Model):

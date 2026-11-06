@@ -127,13 +127,16 @@
     "issuer": "Scope Guard"
   },
   "body_hash": "92670ee71a30115abcfd28b08d9029217e0f708d2f33017a04a68b8fe2593887",
-  "signature": "TKh3uKtemUVyM3lDArWaW6QlQk3FG-arRL4BItlrcPACFkgIoD_BoDqRP-ybW_X1Io4W4uAe17mUbrC59GA7Bw==",
-  "public_key": "OmKWvBDcafm-qKLpD9NzBfGl15PN39buIhx4UtCsKaM=",
+  "signature": "TWYaYy-FYwthXR3fqhoeiRElBk0rA6dcF0SQOO9XZWyp2b7lQMCz6tmipMe2Dp5GbcR_ncyjuvunomUhUtbGBw==",
+  "public_key": "8JQwCV9o0YHJwhz43z6BWuyGJnlyGc02d-0Rdb54nqo=",
   "algorithm": "Ed25519",
   "acceptance": {
     "issuer": "Jordan Reyes",
-    "public_key": "GgX6CHMzN1CW-4qyXQR_X12cpvN806bB384SBUxrKM0=",
-    "signature": "eAccCXnxj4IkY32pJS9eXSk0t9Qvhc2AbrWkdRCd6cCMF1gRBsrCVaM2BpNoNn4sN7HgjTdn9GVisNmCkJ03Ag==",
+    "public_key": "z7q6OEiywrOLnvg9axk8K44NcRB53RC52_rcH7qVKiw=",
+    "signature": "5Q2Skf-O0kjqtKH7Z6izCQbTM3U8IjQhfz2TbQPSXGs_qMQCcjKZ34cXikpkP2IdisOwTvxJH6cagOHKjr0-DQ==",
+    "receipt_id": "co_5d7602a73cba86de6db28804",
+    "body_hash": "92670ee71a30115abcfd28b08d9029217e0f708d2f33017a04a68b8fe2593887",
+    "accepted_at": "2026-11-04T09:00:00Z",
     "algorithm": "Ed25519"
   }
 }

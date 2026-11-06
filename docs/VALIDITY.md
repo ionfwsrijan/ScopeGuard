@@ -134,12 +134,13 @@ Be precise about these:
 | `amounts_balance` | Subtotal, discount, and total agree |
 | `unexpired` | Expiry is either enforced or explicitly not enforced |
 
-Acceptance adds `acceptance_algorithm`, `acceptance_key_distinct`, and
-`acceptance`. Pinned verification adds `pinned_key` and `pinned_client_key`.
+Acceptance adds `acceptance_algorithm`, `acceptance_receipt_binding`,
+`acceptance_body_hash_binding`, `acceptance_key_distinct`, and `acceptance`.
+Pinned verification adds `pinned_key` and `pinned_client_key`.
 A local ledger adds `packet_rehash`, `packet_version`,
-`line_items_match_packet`, and `recorded`. A standalone verifier without the
+`line_items_match_packet`, `client_registered`, and `recorded`. A standalone verifier without the
 packet adds `packet_present` instead of the three packet checks. The bundled
-demo shows **19 passing checks** with both keys pinned and the ledger present.
+demo shows **22 passing checks** with both keys pinned and the ledger present.
 
 ## Reproducibility
 

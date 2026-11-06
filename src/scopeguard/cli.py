@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
@@ -19,7 +20,16 @@ from scopeguard import __version__
 from scopeguard.demo import run_demo
 from scopeguard.errors import ScopeError
 from scopeguard.fixtures import load_messages
-from scopeguard.models import Packet, Receipt
+from scopeguard.models import Acceptance, Packet, Receipt
+from scopeguard.receipt import (
+    Keyring,
+    acceptance_token,
+    build_acceptance,
+    load_public_key_file,
+    parse_acceptance_token,
+    public_key_fingerprint,
+    public_key_pem,
+)
 from scopeguard.service import ScopePaths, ScopeService, as_of_clock
 from scopeguard.switch.client import SwitchClient, SwitchConfig, messages_from_context
 
@@ -398,29 +408,145 @@ def cmd_seal(args: argparse.Namespace) -> int:
             )
         )
         console.print(
-            '[dim]Next: `scopeguard countersign --client "<name>"` for client acceptance.[/]'
+            "[dim]Next: the client registers a public key and runs "
+            "`scopeguard client-accept`; the issuer records it with "
+            "`scopeguard countersign --acceptance <file>`.[/]"
         )
     service.close()
     return 0
+
+
+def _load_acceptance(args: argparse.Namespace) -> Acceptance:
+    if args.token:
+        return parse_acceptance_token(args.token)
+    path = Path(args.acceptance)
+    if not path.exists():
+        raise ScopeError(f"acceptance file not found: {path}")
+    return Acceptance.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def cmd_countersign(args: argparse.Namespace) -> int:
     console = _console(args)
     service = _service(args)
     engagement_id = _engagement_id(args, service)
-    receipt = service.countersign(engagement_id, args.client, receipt_id=args.receipt)
+    acceptance = _load_acceptance(args)
+    receipt = service.accept_client_artifact(engagement_id, acceptance)
     if args.json:
         _emit(args, console, receipt.model_dump(mode="json"))
     else:
         console.print(
-            f"[bold #1F6F6B]Client accepted.[/] {receipt.acceptance.issuer if receipt.acceptance else args.client} "
+            f"[bold #1F6F6B]Client accepted.[/] "
+            f"{receipt.acceptance.issuer if receipt.acceptance else acceptance.issuer} "
             f"countersigned change order `{receipt.body.receipt_id}`."
         )
         console.print(
-            f"[dim]Body hash {receipt.body_hash[:24]}...; total "
+            f"[dim]Body hash {receipt.body_hash[:24]}...; client key "
+            f"{public_key_fingerprint(acceptance.public_key)[:23]}...; total "
             f"{receipt.body.total:,.2f} {receipt.body.currency}.[/]"
         )
     service.close()
+    return 0
+
+
+def cmd_client_keygen(args: argparse.Namespace) -> int:
+    console = _console(args)
+    private_path = Path(args.out)
+    public_path = Path(args.public_out) if args.public_out else private_path.with_suffix(".pub")
+    if private_path.exists() and not args.force:
+        raise ScopeError(
+            f"refusing to overwrite existing key: {private_path}",
+            hint="Pass --force only if you intend to replace the client identity.",
+        )
+    keyring = Keyring.generate(private_path)
+    public_path.write_text(keyring.public_key_b64 + "\n", encoding="ascii")
+    with contextlib.suppress(OSError):
+        public_path.with_name(public_path.name + ".pem").write_bytes(
+            public_key_pem(keyring.public_key_b64)
+        )
+    if args.json:
+        _emit(
+            args,
+            console,
+            {
+                "private_key": str(private_path),
+                "public_key": str(public_path),
+                "public_key_b64": keyring.public_key_b64,
+                "fingerprint": public_key_fingerprint(keyring.public_key_b64),
+            },
+        )
+    else:
+        console.print(
+            Panel.fit(
+                "[bold #1F6F6B]Client key created.[/]\n\n"
+                f"Private key: [bold]{private_path}[/] (keep it on the client machine)\n"
+                f"Public key: [bold]{public_path}[/]\n"
+                f"Fingerprint: [dim]{public_key_fingerprint(keyring.public_key_b64)}[/]",
+                border_style="#1F6F6B",
+            )
+        )
+    return 0
+
+
+def cmd_register_client(args: argparse.Namespace) -> int:
+    console = _console(args)
+    service = _service(args)
+    engagement_id = _engagement_id(args, service)
+    public_key = load_public_key_file(Path(args.public_key))
+    record = service.register_client(engagement_id, args.client, public_key, source="cli")
+    if args.json:
+        _emit(args, console, record)
+    else:
+        console.print(
+            f"[bold #1F6F6B]Client registered.[/] {record['signer']} "
+            f"({record['fingerprint']}) for {engagement_id}."
+        )
+        console.print(
+            "[dim]The private key stays with the client. "
+            "Acceptance is verified against this public key.[/]"
+        )
+    service.close()
+    return 0
+
+
+def cmd_client_accept(args: argparse.Namespace) -> int:
+    console = _console(args)
+    receipt_path = Path(args.receipt)
+    if not receipt_path.exists():
+        raise ScopeError(
+            f"change-order file not found: {receipt_path}",
+            hint="The issuer exports it with `scopeguard seal --export receipt.json`.",
+        )
+    receipt = Receipt.model_validate_json(receipt_path.read_text(encoding="utf-8"))
+    keyring = Keyring.load(Path(args.key))
+    acceptance = build_acceptance(receipt, keyring, args.client, accepted_at=None)
+    out = Path(args.out) if args.out else Path(f"{receipt.body.receipt_id}.acceptance.json")
+    out.write_text(acceptance.model_dump_json(indent=2), encoding="utf-8")
+    token = acceptance_token(acceptance)
+    if args.json:
+        _emit(
+            args,
+            console,
+            {
+                "acceptance": acceptance.model_dump(mode="json"),
+                "token": token,
+                "out": str(out),
+                "fingerprint": public_key_fingerprint(acceptance.public_key),
+            },
+        )
+    else:
+        console.print(
+            Panel.fit(
+                f"[bold #1F6F6B]Acceptance signed.[/]\n\n"
+                f"Change order: [bold]{receipt.body.receipt_id}[/]\n"
+                f"Signer: [bold]{acceptance.issuer}[/]\n"
+                f"Body hash: `{acceptance.body_hash[:24]}...`\n"
+                f"Fingerprint: [dim]{public_key_fingerprint(acceptance.public_key)}[/]\n"
+                f"Artifact: {out}",
+                border_style="#1F6F6B",
+            )
+        )
+        console.print("\n[bold]Paste this into Switch:[/]")
+        console.print(f"SCOPE ACCEPT {token}")
     return 0
 
 
@@ -444,12 +570,16 @@ def cmd_verify(args: argparse.Namespace) -> int:
     console = _console(args)
     service = _service(args)
     receipt = _load_receipt(service, args.receipt, args.engagement)
+    supplied_client_key = (
+        load_public_key_file(Path(args.client_key_file)) if args.client_key_file else None
+    )
     result = service.verify(
         receipt,
         require_unexpired=args.require_unexpired,
         require_acceptance=args.require_acceptance,
         pinned_key=args.pinned_key,
         pinned_client_key=args.pinned_client_key,
+        expected_client_public_key=supplied_client_key,
     )
     if args.json:
         _emit(args, console, result.model_dump(mode="json"))
@@ -552,16 +682,51 @@ def cmd_demo(args: argparse.Namespace) -> int:
     return 0
 
 
+def _serve_home(args: argparse.Namespace) -> Path | None:
+    """Pick the demo ledger automatically so the judge never sees an empty room."""
+    if args.home:
+        return Path(args.home)
+    if os.environ.get("SCOPE_HOME"):
+        return None  # ScopePaths.discover reads the environment
+    root = Path(args.root).resolve()
+    demo_home = root / ".scopeguard" / "demo"
+    if (demo_home / "ledger.sqlite3").exists():
+        return demo_home
+    return None
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     from scopeguard.api.app import create_app
 
+    console = _console(args)
     root = Path(args.root).resolve()
-    home = Path(args.home) if args.home else None
+    if args.demo:
+        demo_home = Path(args.home) if args.home else root / ".scopeguard" / "demo"
+        if args.reset and demo_home.exists():
+            shutil.rmtree(demo_home, ignore_errors=True)
+        console.print("[dim]Building the demo ledger before serving...[/]")
+        run_demo(root=root, home=demo_home, write=None, console=console)
+        home: Path | None = demo_home
+    else:
+        home = _serve_home(args)
+    selected = ScopePaths.discover(root=root, home=home, fixture=args.fixture or "northwind")
+    if not selected.db.exists():
+        console.print(
+            Panel.fit(
+                "[bold #E0A100]The ledger is empty.[/]\n\n"
+                "Run the deterministic demo first, then open the dashboard:\n\n"
+                "[bold]scopeguard demo --reset[/]\n"
+                "[bold]scopeguard serve[/]\n\n"
+                "Or start both in one command: [bold]scopeguard serve --demo[/]",
+                border_style="#E0A100",
+            )
+        )
     app = create_app(root=root, home=home, fixture=args.fixture or "northwind")
     host = os.environ.get("SCOPE_HOST", args.host)
     port = int(os.environ.get("SCOPE_PORT", str(args.port)))
+    console.print(f"[dim]Serving {selected.db} at http://{host}:{port}[/]")
     uvicorn.run(app, host=host, port=port, log_level="warning")
     return 0
 
@@ -650,10 +815,41 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--export", default=None)
     p.set_defaults(func=cmd_seal)
 
-    p = sub.add_parser("countersign", help="record the client's acceptance signature")
+    p = sub.add_parser(
+        "client-keygen",
+        help="create a client-held Ed25519 key pair (run on the client machine)",
+    )
+    p.add_argument("--out", default="client-ed25519.pem", help="private key path")
+    p.add_argument("--public-out", default=None, help="public key path")
+    p.add_argument("--force", action="store_true", help="replace an existing key")
+    p.set_defaults(func=cmd_client_keygen)
+
+    p = sub.add_parser(
+        "register-client",
+        help="pin the named client's public key before acceptance",
+    )
     p.add_argument("--engagement", default=None)
     p.add_argument("--client", required=True, help="named client signer")
-    p.add_argument("--receipt", default=None, help="change order id (default: latest)")
+    p.add_argument("--public-key", required=True, help="client public key file")
+    p.set_defaults(func=cmd_register_client)
+
+    p = sub.add_parser(
+        "client-accept",
+        help="sign an acceptance artifact with the client-held private key",
+    )
+    p.add_argument("--receipt", required=True, help="exported change-order JSON")
+    p.add_argument("--client", required=True, help="named client signer")
+    p.add_argument("--key", required=True, help="client private key")
+    p.add_argument("--out", default=None, help="acceptance artifact path")
+    p.set_defaults(func=cmd_client_accept)
+
+    p = sub.add_parser(
+        "countersign", help="verify and record the client's signed acceptance artifact"
+    )
+    p.add_argument("--engagement", default=None)
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument("--acceptance", help="acceptance artifact JSON")
+    group.add_argument("--token", help="SCOPE ACCEPT token from the Switch room")
     p.set_defaults(func=cmd_countersign)
 
     p = sub.add_parser("verify", help="verify a change order by id, path, or latest")
@@ -663,7 +859,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--require-acceptance", action="store_true")
     p.add_argument("--pinned-key", action="store_true", help="also require the local issuer key")
     p.add_argument(
-        "--pinned-client-key", action="store_true", help="also require the local client key"
+        "--pinned-client-key",
+        action="store_true",
+        help="also require the client key registered for this engagement",
+    )
+    p.add_argument(
+        "--client-key-file",
+        default=None,
+        help="require this client public key file (offline pin)",
     )
     p.set_defaults(func=cmd_verify)
 
@@ -695,6 +898,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8787)
     p.add_argument("--fixture", default=None)
+    p.add_argument(
+        "--demo",
+        action="store_true",
+        help="build the demo ledger first (use --reset to rebuild it)",
+    )
+    p.add_argument("--reset", action="store_true", help="with --demo, rebuild from scratch")
     p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser("clerk", help="run the deterministic headless Switch Clerk")

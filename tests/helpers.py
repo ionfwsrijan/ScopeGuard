@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from scopeguard.models import Engagement, Packet, Receipt
+from scopeguard.receipt import Keyring
 from scopeguard.service import ScopeService
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,7 +59,14 @@ def sealed(service: ScopeService, engagement_id: str = ENGAGEMENT_ID) -> Receipt
 def accepted(service: ScopeService, engagement_id: str = ENGAGEMENT_ID) -> Receipt:
     """Drive the full workflow and return a two-party signed change order."""
     receipt = sealed(service, engagement_id)
-    return service.countersign(engagement_id, CLIENT_SIGNER, receipt_id=receipt.body.receipt_id)
+    client = Keyring.generate()
+    service.register_client(engagement_id, CLIENT_SIGNER, client.public_key_b64)
+    return service.countersign(
+        engagement_id,
+        CLIENT_SIGNER,
+        keyring=client,
+        receipt_id=receipt.body.receipt_id,
+    )
 
 
 __all__ = [

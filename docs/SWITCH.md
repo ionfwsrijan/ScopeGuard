@@ -151,8 +151,8 @@ Dana:    SIGN NORTHWIND-2026 TERMS AS ACCOUNT_LEAD
 Iris:    SIGN NORTHWIND-2026 TERMS AS LEGAL
 Dana:    SCOPE SEAL
 Clerk:   Sealed. Change order co_5d7602a7… Total 42,240.00 USD.
-         Client, reply `SCOPE ACCEPT <your name>` to countersign.
-Jordan:  SCOPE ACCEPT Jordan Reyes
+         Jordan: sign the exported change order locally and paste the token.
+Jordan:  SCOPE ACCEPT sgaccept1.<client-signed-token>
 Clerk:   Accepted by Jordan Reyes. Change order is now two-party signed.
          Signed change order handed to delivery-northwind.
 ```
@@ -226,19 +226,20 @@ What a pass does:
    hash; record valid ones; report rejected ones.
 4. `SCOPE SEAL` triggers a gate check; if clear, seal and post the change-order
    id.
-5. `SCOPE ACCEPT <name>` records the client's countersignature.
+5. `SCOPE ACCEPT <token>` records the client's countersignature only when it
+   verifies against the public key registered for the engagement.
 6. If a delivery room is bound, post the handoff once, after acceptance.
 7. Post a compact status with the packet hash, valid pairs, stale pairs, and
    pending pairs when asked for `SCOPE STATUS`.
 
 It never invents a signature and never decides a commercial question.
 
-The countersignature uses the client key at
-`$SCOPE_HOME/keys/client-ed25519.pem` (`~/.scopeguard` by default, or the
-`--home` directory). In a real deployment the client's key lives with the
-client; the bundled flow keeps it in the same home so the demo can run offline.
-The verification model is the same either way: the client signs the issuer's
-body hash, and the two keys are distinct.
+The client's private key stays on the client machine. Before acceptance, the
+client creates a key with `scopeguard client-keygen`; the issuer pins the public
+key with `scopeguard register-client`. The client signs the exported receipt
+with `scopeguard client-accept` and posts the resulting token. The Clerk checks
+the signer name, registered key, receipt id, body hash, timestamp, and Ed25519
+signature before recording it or handing anything to delivery.
 
 ## Local Switch stack (optional)
 

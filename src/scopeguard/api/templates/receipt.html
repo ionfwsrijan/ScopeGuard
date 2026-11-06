@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ receipt.body.receipt_id }} - Scope Guard{% endblock %}
+{% block page_name %}Signed change order{% endblock %}
 {% block content %}
 
 <nav class="crumbs"><a href="/">Ledger</a><span>/</span><a href="/engagements/{{ receipt.body.engagement_id }}">{{ receipt.body.engagement_id }}</a><span>/</span><span>change order</span></nav>

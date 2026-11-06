@@ -80,7 +80,7 @@ the Red Team's value, stated in money.
 Eight exact signatures from four named humans bind to the new hash. The Clerk
 seals a two-party change order. The client countersigns it. Verification passes.
 A byte-level tamper check fails. Only the signed line items cross into the
-linked delivery room. The audit chain closes with 27 events.
+linked delivery room. The audit chain closes with 28 events.
 
 The full run is reproducible in one command and checked in at
 [`demo/transcript.md`](demo/transcript.md).
@@ -91,13 +91,18 @@ The full run is reproducible in one command and checked in at
 py -3 -m venv .venv
 .\.venv\Scripts\python -m pip install -e ".[dev]"
 .\.venv\Scripts\scopeguard demo --reset
+.\.venv\Scripts\scopeguard serve --demo --reset --port 8787
 ```
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 .venv/bin/scopeguard demo --reset
+.venv/bin/scopeguard serve --demo --reset --port 8787
 ```
+
+Open `http://127.0.0.1:8787/`. The `serve --demo` option builds a populated
+demo ledger before the dashboard starts, including on a clean checkout.
 
 The demo is deterministic. The clock is frozen at `2026-11-04`, keys are
 generated in a temporary home, and the same inputs always produce the same
@@ -134,6 +139,10 @@ Switch is not a chat skin over a webhook. It is the room where the work happens:
   earlier signature.
 - **A linked handoff.** The delivery room receives the receipt id and the signed
   line items, not a summary of the negotiation.
+- **Independent client acceptance.** The client keeps its Ed25519 private key,
+  registers its public key out of band, signs the exported change order locally,
+  and posts a signed token. The issuer verifies the token without holding the
+  client's private key.
 
 See [`docs/SWITCH.md`](docs/SWITCH.md) for the API surface, template, and room
 script. The template in
@@ -147,7 +156,7 @@ creates the agents, rooms, and link.
 | Deterministic core | Policy, evidence, pricing, challenge, revision, hashing, signatures |
 | Switch transport | HTTP client for rooms, context, messages, and operations |
 | Headless Clerk | Records approvals from room messages, seals, countersigns, hands off |
-| CLI | `init`, `ingest`, `assess`, `challenge`, `revise`, `sign`, `sync`, `seal`, `countersign`, `verify`, `verify-audit`, `handoff`, `switch-check`, `export`, `demo`, `serve`, `clerk` |
+| CLI | `init`, `ingest`, `assess`, `challenge`, `revise`, `sign`, `sync`, `seal`, `client-keygen`, `register-client`, `client-accept`, `countersign`, `verify`, `verify-audit`, `handoff`, `switch-check`, `export`, `demo`, `serve`, `clerk` |
 | Web UI | Read-only ledger, engagement view, signed change order, verifier |
 | JSON API | Engagement, packet, receipt, verification, audit, health |
 | Tests | 304 tests, ruff and mypy clean, Python 3.11-3.13 |
@@ -173,7 +182,7 @@ boundaries of what the demo proves.
 
 ## Demo screenshots
 
-| Ledger | Engagement | Signed change order |
+| Redesigned dashboard | Engagement packet and approvals | Signed change order and verification |
 | --- | --- | --- |
 | ![Ledger](demo/images/01-room.png) | ![Engagement](demo/images/02-case.png) | ![Change order](demo/images/03-receipt.png) |
 

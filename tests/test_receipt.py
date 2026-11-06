@@ -19,14 +19,20 @@ from scopeguard.models import (
     Verdict,
 )
 from scopeguard.receipt import (
+    ACCEPTANCE_TOKEN_PREFIX,
     Keyring,
+    acceptance_error,
     acceptance_message,
+    acceptance_token,
+    apply_acceptance,
+    build_acceptance,
     build_receipt,
     canonical_hash,
     canonical_json,
     countersign,
     expected_phrase,
     packet_hash,
+    parse_acceptance_token,
     parse_approval_phrase,
     phrases_match,
     public_key_from_b64,
@@ -469,10 +475,8 @@ def test_a_countersigned_receipt_verifies_as_two_party() -> None:
 
 def test_the_client_key_must_differ_from_the_issuer_key() -> None:
     keyring, _, receipt = setup()
-    accepted = countersign(receipt, keyring, "Jordan Reyes")
-    result = verify_receipt(accepted)
-    assert result.ok is False
-    assert "acceptance_key_distinct" in [check.code for check in result.checks if not check.ok]
+    with pytest.raises(ValueError, match="client key is the issuer key"):
+        countersign(receipt, keyring, "Jordan Reyes")
 
 
 def test_editing_the_acceptance_signature_fails() -> None:
@@ -516,13 +520,21 @@ def test_pinned_client_key_rejects_a_different_key() -> None:
 def test_countersignature_signs_the_exact_acceptance_message() -> None:
     _, _, receipt = setup()
     client = Keyring.generate()
-    accepted = countersign(receipt, client, "  Jordan Reyes  ")
+    accepted = countersign(receipt, client, "  Jordan Reyes  ", accepted_at=MOMENT)
     assert accepted.acceptance is not None
     assert accepted.acceptance.issuer == "Jordan Reyes"
-    message = acceptance_message(receipt.body_hash, "Jordan Reyes", client.public_key_b64)
+    message = acceptance_message(
+        receipt.body_hash,
+        "Jordan Reyes",
+        client.public_key_b64,
+        receipt.body.receipt_id,
+        MOMENT,
+    )
     assert '"body_hash"' in message
     assert '"issuer":"Jordan Reyes"' in message
     assert '"public_key"' in message
+    assert '"receipt_id"' in message
+    assert '"accepted_at":"2026-11-04T09:00:00Z"' in message
 
 
 def test_countersignature_requires_a_named_signer() -> None:
@@ -551,6 +563,48 @@ def test_ed25519_private_key_material_is_valid(tmp_path: Path) -> None:
     loaded = Keyring.load(tmp_path / "key.pem")
     assert isinstance(loaded.private_key, Ed25519PrivateKey)
     assert loaded.public_key_b64 == keyring.public_key_b64
+
+
+def test_acceptance_artifact_binds_the_receipt_and_body_hash() -> None:
+    _, _, receipt = setup()
+    client = Keyring.generate()
+    artifact = build_acceptance(receipt, client, "Jordan Reyes", accepted_at=MOMENT)
+    assert artifact.receipt_id == receipt.body.receipt_id
+    assert artifact.body_hash == receipt.body_hash
+    assert artifact.accepted_at == MOMENT
+    assert acceptance_error(receipt, artifact) is None
+
+
+def test_acceptance_cannot_be_moved_to_another_change_order() -> None:
+    _, _, first = setup()
+    _, _, second = setup(amount=2000.0)
+    client = Keyring.generate()
+    artifact = build_acceptance(first, client, "Jordan Reyes", accepted_at=MOMENT)
+    assert acceptance_error(second, artifact) is not None
+    with pytest.raises(ValueError, match="acceptance is for"):
+        apply_acceptance(second, artifact)
+
+
+def test_tampering_with_an_acceptance_artifact_is_detected() -> None:
+    _, _, receipt = setup()
+    artifact = build_acceptance(receipt, Keyring.generate(), "Jordan Reyes", accepted_at=MOMENT)
+    artifact.issuer = "Someone Else"
+    assert acceptance_error(receipt, artifact) is not None
+
+
+def test_acceptance_token_round_trips_through_switch_text() -> None:
+    _, _, receipt = setup()
+    artifact = build_acceptance(receipt, Keyring.generate(), "Jordan Reyes", accepted_at=MOMENT)
+    token = acceptance_token(artifact)
+    assert token.startswith(ACCEPTANCE_TOKEN_PREFIX)
+    parsed = parse_acceptance_token(f"SCOPE ACCEPT {token}")
+    assert parsed == artifact
+    assert "SCOPE ACCEPT" in f"SCOPE ACCEPT {token}"
+
+
+def test_a_malformed_acceptance_token_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        parse_acceptance_token("SCOPE ACCEPT not-a-token")
 
 
 def test_request_type_enum_is_still_a_string() -> None:

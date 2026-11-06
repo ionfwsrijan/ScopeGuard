@@ -136,8 +136,9 @@ agents:
 
           scopeguard sync --engagement <ENGAGEMENT_ID> --room-id <this-room>
           scopeguard status --engagement <ENGAGEMENT_ID> --json
-          scopeguard seal --engagement <ENGAGEMENT_ID> --json
-          scopeguard countersign --engagement <ENGAGEMENT_ID> --client "<name>"
+          scopeguard register-client --engagement <ENGAGEMENT_ID> --client "<name>" --public-key <client.pub>
+          scopeguard seal --engagement <ENGAGEMENT_ID> --export <receipt.json>
+          scopeguard countersign --engagement <ENGAGEMENT_ID> --token "<SCOPE ACCEPT token>"
           scopeguard handoff --engagement <ENGAGEMENT_ID>
 
       A valid signature is exactly:
@@ -150,11 +151,17 @@ agents:
       record it.
 
       When the gate is clear and a human says `SCOPE SEAL`, seal the change
-      order. When the client says `SCOPE ACCEPT <name>`, record the client's
-      countersignature. Only after acceptance does the handoff cross into the
-      linked delivery room. The handoff contains only signed line items; never
-      send a refused ask, a stale signature, or a superseded packet into
-      delivery.
+      order and export it for the client. The client signs the acceptance on
+      their own machine with a private key Scope Guard never holds:
+
+          scopeguard client-accept --receipt <receipt.json> --client "<name>" --key <their-private-key>
+
+      They paste the resulting `SCOPE ACCEPT <token>` into this room. Verify
+      the token against the registered public key and record it. A typed name
+      is not a signature and must be refused. Only after acceptance does the
+      handoff cross into the linked delivery room. The handoff contains only
+      signed line items; never send a refused ask, a stale signature, or a
+      superseded packet into delivery.
 
       Before sealing, always tell the room what is still pending. After
       sealing, tell them the change-order id and the verify command.
@@ -215,8 +222,11 @@ rooms:
       invent it. When the packet changes, every earlier signature is stale.
       That is a feature.
 
-      The client countersigns with `SCOPE ACCEPT <name>` after the change
-      order is sealed. Nothing crosses into delivery before that acceptance.
+      The client countersigns with a key they hold. The issuer registers the
+      client's public key out of band, exports the sealed change order, and
+      the client runs `scopeguard client-accept` on their own machine. They
+      paste `SCOPE ACCEPT <token>` into this room. A typed name is not a
+      signature. Nothing crosses into delivery before that acceptance.
 
       Start by reading the engagement, the evidence, and the current packet.
       Speak in short, specific messages. Name the hash you are talking about.

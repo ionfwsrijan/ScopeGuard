@@ -10,38 +10,42 @@
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
+  {% set nav_current = self.page_name()|trim %}
   <header class="topbar">
-    <div class="shell topbar-inner">
+    <div class="topbar-inner">
       <a class="brand" href="/" aria-label="Scope Guard home">
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 32 36" width="26" height="30"><path d="M16 1.5 29 6v11.2c0 8.2-5.4 14.4-13 17.3C8.4 31.6 3 25.4 3 17.2V6L16 1.5Z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="m9.5 17.4 4.2 4.2 8.8-9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
-        <span class="brand-word">Scope Guard</span>
+        <span class="brand-word">Scope Guard<span class="brand-caption">SCOPE MANAGEMENT</span></span>
       </a>
       <nav class="nav" aria-label="Primary">
-        <a href="/">Ledger</a>
-        <a href="/verify">Verify</a>
-        <a href="/api/health">API</a>
-        <span class="version">v{{ version }}</span>
+        <span class="nav-label">WORKSPACE</span>
+        <a class="nav-item {{ 'active' if nav_current == 'Overview' else '' }}" href="/"><span class="nav-icon">◫</span> Overview</a>
+        <a class="nav-item {{ 'active' if nav_current in ('Engagement', 'Signed change order') else '' }}" href="/#ledger"><span class="nav-icon">▤</span> Change orders</a>
+        <a class="nav-item {{ 'active' if nav_current == 'Verify receipt' else '' }}" href="/verify"><span class="nav-icon">◉</span> Verify receipt</a>
+        <span class="nav-label nav-label-secondary">SYSTEM</span>
+        <a class="nav-item" href="/api/health"><span class="nav-icon">⌘</span> API status</a>
       </nav>
+      <div class="sidebar-bottom"><span class="online-dot"></span><span>Ledger integrity</span><strong>v{{ version }}</strong></div>
     </div>
   </header>
 
-  <main id="main" class="shell">
-    {% block content %}{% endblock %}
-  </main>
-
-  <footer class="footer">
-    <div class="shell footer-inner">
-      <div>
-        <span class="brand-word small">Scope Guard</span>
-        <span class="muted">Every 'one more thing' gets a price.</span>
-      </div>
-      <div class="muted">
-        Deterministic pricing · independent Red Team · human signatures · two-party change orders ·
-        <a href="https://switchagents.ai" rel="noreferrer">built for Switch</a>
-      </div>
+  <div class="app-column">
+    <div class="appbar">
+      <div class="appbar-path"><span>Workspace</span><b>/</b><strong>{% block page_name %}Overview{% endblock %}</strong></div>
+      <div class="appbar-right"><span class="secure-pill"><i></i> Secure ledger</span><span class="avatar">SG</span></div>
     </div>
-  </footer>
+    <main id="main" class="shell">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+      <div class="shell footer-inner">
+        <div><span class="brand-word small">Scope Guard</span><span class="muted">Every 'one more thing' gets a price.</span></div>
+        <div class="muted">Deterministic pricing · independent Red Team · human signatures · <a href="https://switchagents.ai" rel="noreferrer">built for Switch</a></div>
+      </div>
+    </footer>
+  </div>
 </body>
 </html>

@@ -325,11 +325,17 @@ def test_the_sealed_packet_status_and_timestamp_are_recorded(service: ScopeServi
 
 # ---------------------------------------------------------------- countersign
 def test_countersignature_makes_the_change_order_two_party(service: ScopeService) -> None:
+    from scopeguard.receipt import Keyring
+
     receipt = sealed(service)
-    accepted_receipt = service.countersign(ENGAGEMENT_ID, CLIENT_SIGNER)
+    client = Keyring.generate()
+    service.register_client(ENGAGEMENT_ID, CLIENT_SIGNER, client.public_key_b64)
+    accepted_receipt = service.countersign(ENGAGEMENT_ID, CLIENT_SIGNER, keyring=client)
     assert receipt.acceptance is None
     assert accepted_receipt.acceptance is not None
     assert accepted_receipt.acceptance.issuer == CLIENT_SIGNER
+    assert accepted_receipt.acceptance.receipt_id == receipt.body.receipt_id
+    assert accepted_receipt.acceptance.body_hash == receipt.body_hash
     assert accepted_receipt.body_hash == receipt.body_hash
     stored = service.store.latest_receipt(ENGAGEMENT_ID)
     assert stored.acceptance is not None
@@ -337,15 +343,72 @@ def test_countersignature_makes_the_change_order_two_party(service: ScopeService
     assert result.ok is True
 
 
+def test_countersigning_without_a_registered_client_is_refused(service: ScopeService) -> None:
+    from scopeguard.receipt import Keyring
+
+    sealed(service)
+    with pytest.raises(ConfigError, match="no client key is registered"):
+        service.countersign(ENGAGEMENT_ID, CLIENT_SIGNER, keyring=Keyring.generate())
+
+
+def test_a_different_signer_or_key_cannot_accept(service: ScopeService) -> None:
+    from scopeguard.receipt import Keyring
+
+    sealed(service)
+    registered = Keyring.generate()
+    service.register_client(ENGAGEMENT_ID, CLIENT_SIGNER, registered.public_key_b64)
+    with pytest.raises(ConfigError, match="registered client"):
+        service.countersign(ENGAGEMENT_ID, "Someone Else", keyring=registered)
+    with pytest.raises(ConfigError, match="does not match"):
+        service.countersign(ENGAGEMENT_ID, CLIENT_SIGNER, keyring=Keyring.generate())
+
+
+def test_the_issuer_home_never_creates_a_client_private_key(service: ScopeService) -> None:
+    from scopeguard.receipt import Keyring
+
+    receipt = sealed(service)
+    client = Keyring.generate()
+    service.register_client(ENGAGEMENT_ID, CLIENT_SIGNER, client.public_key_b64)
+    service.countersign(ENGAGEMENT_ID, CLIENT_SIGNER, keyring=client)
+    assert not (service.paths.home / "keys" / "client-ed25519.pem").exists()
+    assert (service.paths.home / "clients" / f"{ENGAGEMENT_ID}.json").exists()
+    assert service.registered_client(ENGAGEMENT_ID)["fingerprint"].startswith("sha256:")
+    assert receipt.acceptance is None
+
+
 def test_countersigning_before_sealing_is_not_found(service: ScopeService) -> None:
+    from scopeguard.receipt import Keyring
+
     with pytest.raises(NotFoundError):
-        service.countersign(ENGAGEMENT_ID, CLIENT_SIGNER)
+        service.countersign(ENGAGEMENT_ID, CLIENT_SIGNER, keyring=Keyring.generate())
 
 
 def test_a_second_countersignature_is_refused(service: ScopeService) -> None:
     accepted(service)
+    from scopeguard.receipt import Keyring
+
     with pytest.raises(ValueError):
-        service.countersign(ENGAGEMENT_ID, "Someone Else")
+        service.countersign(ENGAGEMENT_ID, "Someone Else", keyring=Keyring.generate())
+
+
+def test_a_client_artifact_can_be_recorded_from_a_token(
+    service: ScopeService,
+) -> None:
+    from scopeguard.receipt import (
+        Keyring,
+        acceptance_token,
+        build_acceptance,
+        parse_acceptance_token,
+    )
+
+    receipt = sealed(service)
+    client = Keyring.generate()
+    service.register_client(ENGAGEMENT_ID, CLIENT_SIGNER, client.public_key_b64)
+    artifact = build_acceptance(receipt, client, CLIENT_SIGNER)
+    parsed = parse_acceptance_token(f"SCOPE ACCEPT {acceptance_token(artifact)}")
+    recorded = service.accept_client_artifact(ENGAGEMENT_ID, parsed)
+    assert recorded.acceptance is not None
+    assert recorded.acceptance.issuer == CLIENT_SIGNER
 
 
 # --------------------------------------------------------------------- verify

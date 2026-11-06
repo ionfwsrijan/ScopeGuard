@@ -126,8 +126,9 @@ tampered copy fails.
 **Narration:**
 
 > Eight signatures from four named humans bind to one hash. The gate clears and
-> Clerk issues an Ed25519-signed change order. The client countersigns the
-> issuer's body hash. A one-party receipt is a promise; a two-party change
+> Clerk issues an Ed25519-signed change order. Jordan signs its id and body hash
+> on the client machine with a client-held key; the issuer only records the
+> signed artifact. A one-party receipt is a promise; a two-party change
 > order is an agreement. Now verification: change one character and the body
 > hash, the id, and the signature all fail. The audit chain is separate and also
 > hashes every event, so history cannot be quietly rewritten.
@@ -147,7 +148,9 @@ tampered copy fails.
 ## Exact live-room script
 
 Post these in `scope-northwind` in order. The Clerk records only exact phrases
-from named role holders.
+from named role holders. Before the client step, register the client's public
+key out of band. Jordan downloads the sealed JSON and runs `scopeguard
+client-accept` on the client machine.
 
 ```
 Dana      Northwind wants a mobile app, a two-week pull-in, 20% off, and
@@ -172,8 +175,8 @@ Dana      SIGN NORTHWIND-2026 TERMS AS ACCOUNT_LEAD
 Iris      SIGN NORTHWIND-2026 TERMS AS LEGAL
 Dana      SCOPE SEAL
 Clerk     Sealed. Change order co_5d7602a7… Total 42,240.00 USD.
-          Client, reply `SCOPE ACCEPT <your name>` to countersign.
-Jordan    SCOPE ACCEPT Jordan Reyes
+          Jordan: sign the exported change order locally and paste the token.
+Jordan    SCOPE ACCEPT sgaccept1.<client-signed-token>
 Clerk     Accepted by Jordan Reyes. Change order is now two-party signed.
           Signed change order handed to delivery-northwind.
 ```
@@ -183,10 +186,15 @@ ignored. A message from someone who does not hold the role is rejected. A
 message bound to an old hash is stale and does not count. A bot's summary is not
 a signature.
 
+The deterministic replay creates a temporary client key outside the issuer
+home, registers its public key, signs the exact artifact, and deletes the
+temporary private key after the run. The live flow keeps the private key on
+the client's machine.
+
 The same sequence is in
 [`fixtures/northwind/switch_messages.yaml`](../fixtures/northwind/switch_messages.yaml)
-and is replayed by `scopeguard demo`. The client acceptance is recorded by the
-demo and the headless Clerk through the same `countersign` path.
+and is replayed by `scopeguard demo`. The acceptance is verified from the same
+signed artifact format used by the live Clerk.
 
 ## Fallback: record the deterministic replay
 
@@ -209,11 +217,11 @@ Terminal beats to pause on:
 | Gate | 8 valid, 2 stale, 0 blocking findings |
 | Total | `$38,400` → `$42,240`; `$3,840` margin protected |
 | Change order | `co_5d7602a73cba86de6db28804` |
-| Countersignature | Jordan Reyes over the issuer's body hash |
-| Verify | 19 checks with pinned keys, all PASS |
+| Countersignature | Jordan Reyes signs the change-order id and body hash with a client-held key |
+| Verify | 22 checks with pinned keys, all PASS |
 | Tamper | `body_hash` and `amounts_balance` fail |
 | Handoff | only four signed line items |
-| Audit | 27 events, chain intact |
+| Audit | 28 events, chain intact |
 
 ## Screenshots
 
@@ -224,33 +232,15 @@ Terminal beats to pause on:
 | `demo/images/03-receipt.png` | `/change-orders/co_…` — signed change order and verification |
 | `demo/receipt.json` | A real signed change order that verifies standalone |
 
-Regenerate them with Chrome headless after `scopeguard demo` and
-`scopeguard serve`:
+Regenerate all three with the checked-in capture script. It starts a populated
+demo server, captures the redesigned pages, and stops the server when done:
 
 ```powershell
-.\.venv\Scripts\scopeguard.exe demo --reset
-Start-Process -WindowStyle Hidden .\.venv\Scripts\scopeguard.exe `
-  -ArgumentList '--root','.','--home','.scopeguard/demo','serve','--port','8787'
-Start-Sleep -Seconds 2
-
-$chrome = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
-$root = (Get-Location).Path
-$receipt = (Get-Content demo\receipt.json | ConvertFrom-Json).body.receipt_id
-& $chrome --headless=new --disable-gpu --no-first-run `
-  --user-data-dir="$env:TEMP\chrome-scopeguard" --window-size=1440,1800 `
-  --screenshot="$root\demo\images\01-room.png" "http://127.0.0.1:8787/"
-& $chrome --headless=new --disable-gpu --no-first-run `
-  --user-data-dir="$env:TEMP\chrome-scopeguard" --window-size=1440,1800 `
-  --screenshot="$root\demo\images\02-case.png" `
-  "http://127.0.0.1:8787/engagements/northwind-2026"
-& $chrome --headless=new --disable-gpu --no-first-run `
-  --user-data-dir="$env:TEMP\chrome-scopeguard" --window-size=1440,1800 `
-  --screenshot="$root\demo\images\03-receipt.png" `
-  "http://127.0.0.1:8787/change-orders/$receipt"
+.\scripts\capture_demo_screenshots.ps1
 ```
 
-Stop the server when done. The screenshots are read-only views of the same
-ledger; they do not contain a signature path.
+The screenshots are read-only views of the same seeded ledger; they do not
+contain a signature path.
 
 ## Editing notes
 

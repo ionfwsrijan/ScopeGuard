@@ -6,9 +6,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from helpers import ENGAGEMENT_ID, sign_all
+from helpers import CLIENT_SIGNER, ENGAGEMENT_ID, sign_all
 from scopeguard.errors import NotFoundError
 from scopeguard.models import ApprovalStatus
+from scopeguard.receipt import Keyring, acceptance_token, build_acceptance
 from scopeguard.service import ScopeService
 from scopeguard.switch.clerk import Clerk
 from scopeguard.switch.fake import FakeSwitch
@@ -120,15 +121,20 @@ def test_clerk_seals_accepts_and_posts_the_handoff(clerk: Clerk, switch: FakeSwi
     assert receipt.body.receipt_id.startswith("co_")
     assert any("Sealed." in item.body for item in switch.messages(SCOPE))
 
-    switch.human(SCOPE, "Jordan", "SCOPE ACCEPT Jordan Reyes")
+    client = Keyring.generate()
+    clerk.service.register_client(ENGAGEMENT_ID, CLIENT_SIGNER, client.public_key_b64)
+    artifact = build_acceptance(receipt, client, CLIENT_SIGNER)
+    switch.human(SCOPE, "Jordan", f"SCOPE ACCEPT {acceptance_token(artifact)}")
     clerk.run_once()
     accepted_receipt = clerk.service.store.latest_receipt(ENGAGEMENT_ID)
     assert accepted_receipt.acceptance is not None
-    assert accepted_receipt.acceptance.issuer == "Jordan Reyes"
+    assert accepted_receipt.acceptance.issuer == CLIENT_SIGNER
+    assert accepted_receipt.acceptance.receipt_id == receipt.body.receipt_id
 
     sales = [item.body for item in switch.messages(SCOPE)]
     delivery = [item.body for item in switch.messages(DELIVERY)]
     assert any("Accepted by Jordan Reyes" in body for body in sales)
+    assert any("client key" in body for body in sales)
     assert any("Only the line items above leave this room." in body for body in delivery)
     assert any(receipt.body.receipt_id in body for body in delivery)
 
@@ -175,10 +181,22 @@ def test_clerk_status_view_reports_a_sealed_change_order(clerk: Clerk, switch: F
     assert "Gate: **clear**." in text
 
 
+def test_clerk_rejects_a_name_without_a_client_signature(clerk: Clerk, switch: FakeSwitch) -> None:
+    sign_all(clerk.service)
+    switch.human(SCOPE, "Dana", "SCOPE SEAL")
+    clerk.run_once()
+    switch.human(SCOPE, "Jordan", "SCOPE ACCEPT Jordan Reyes")
+    result = clerk.run_once()
+    assert result["recorded"] == 0
+    bodies = [item.body for item in switch.messages(SCOPE)]
+    assert any("A name alone is not a signature" in body for body in bodies)
+    assert clerk.service.store.latest_receipt(ENGAGEMENT_ID).acceptance is None
+
+
 def test_clerk_accept_without_a_sealed_change_order_is_reported(
     clerk: Clerk, switch: FakeSwitch
 ) -> None:
-    switch.human(SCOPE, "Jordan", "SCOPE ACCEPT Jordan Reyes")
+    switch.human(SCOPE, "Jordan", "SCOPE ACCEPT sgaccept1.bad")
     result = clerk.run_once()
     assert result["recorded"] == 0
     assert any("Acceptance not recorded" in item.body for item in switch.messages(SCOPE))

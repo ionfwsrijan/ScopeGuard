@@ -242,37 +242,168 @@ def build_receipt(
     )
 
 
-def acceptance_message(body_hash: str, issuer: str, public_key: str) -> str:
-    """The exact payload a client signs when accepting a change order."""
+ACCEPTANCE_TOKEN_PREFIX = "sgaccept1."
+
+
+def acceptance_message(
+    body_hash: str,
+    issuer: str,
+    public_key: str,
+    receipt_id: str,
+    accepted_at: datetime,
+) -> str:
+    """The exact payload a client signs when accepting one change order."""
     return canonical_json(
         {
+            "accepted_at": accepted_at,
             "body_hash": body_hash,
             "issuer": issuer.strip(),
             "public_key": public_key,
+            "receipt_id": receipt_id,
         }
     )
 
 
-def countersign(receipt: Receipt, keyring: Keyring, issuer: str) -> Receipt:
-    """Add a client acceptance signature over the issuer's signed body hash."""
+def public_key_fingerprint(public_key: str) -> str:
+    """A stable fingerprint of an Ed25519 public key, for out-of-band comparison."""
+    raw = base64.urlsafe_b64decode(public_key.encode("ascii"))
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def load_public_key_file(path: Path) -> str:
+    """Read a base64 public key file, or an Ed25519 SubjectPublicKeyInfo PEM."""
+    data = path.read_bytes()
+    if data.lstrip().startswith(b"-----BEGIN PUBLIC KEY-----"):
+        key = serialization.load_pem_public_key(data)
+        if not isinstance(key, Ed25519PublicKey):
+            raise ValueError(f"{path} is not an Ed25519 public key")
+        raw = key.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        return base64.urlsafe_b64encode(raw).decode("ascii")
+    value = data.decode("ascii").strip()
+    public_key_from_b64(value)  # validates the bytes
+    return value
+
+
+def public_key_pem(public_key: str) -> bytes:
+    key = public_key_from_b64(public_key)
+    return key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+
+def build_acceptance(
+    receipt: Receipt,
+    keyring: Keyring,
+    issuer: str,
+    *,
+    accepted_at: datetime | None = None,
+) -> Acceptance:
+    """Create the client-side acceptance artifact.
+
+    This is the only function that needs the client's private key. It runs on
+    the client's machine (``scopeguard client-accept``) and its output is safe
+    to paste into the room: the Clerk verifies it with the public key alone.
+    """
     clean = issuer.strip()
     if not clean:
         raise ValueError("a countersignature needs a named client signer")
     if receipt.acceptance is not None:
         raise ValueError("receipt already has a client acceptance")
     public_key = keyring.public_key_b64
-    signature = keyring.sign(
-        acceptance_message(receipt.body_hash, clean, public_key).encode("utf-8")
+    moment = (accepted_at or datetime.now(UTC)).astimezone(UTC).replace(microsecond=0)
+    message = acceptance_message(
+        receipt.body_hash,
+        clean,
+        public_key,
+        receipt.body.receipt_id,
+        moment,
     )
-    return receipt.model_copy(
-        update={
-            "acceptance": Acceptance(
-                issuer=clean,
-                public_key=public_key,
-                signature=signature,
-            )
-        }
+    return Acceptance(
+        issuer=clean,
+        public_key=public_key,
+        signature=keyring.sign(message.encode("utf-8")),
+        receipt_id=receipt.body.receipt_id,
+        body_hash=receipt.body_hash,
+        accepted_at=moment,
     )
+
+
+def acceptance_error(receipt: Receipt, acceptance: Acceptance) -> str | None:
+    """Return why an acceptance does not bind to this receipt, or ``None``."""
+    if acceptance.receipt_id != receipt.body.receipt_id:
+        return f"acceptance is for {acceptance.receipt_id}, not {receipt.body.receipt_id}"
+    if acceptance.body_hash != receipt.body_hash:
+        return "acceptance is bound to a different change-order body hash"
+    if acceptance.public_key == receipt.public_key:
+        return "the client key is the issuer key"
+    try:
+        client_key = public_key_from_b64(acceptance.public_key)
+        client_key.verify(
+            base64.urlsafe_b64decode(acceptance.signature.encode("ascii")),
+            acceptance_message(
+                acceptance.body_hash,
+                acceptance.issuer,
+                acceptance.public_key,
+                acceptance.receipt_id,
+                acceptance.accepted_at,
+            ).encode("utf-8"),
+        )
+    except (InvalidSignature, ValueError, TypeError) as exc:
+        return f"acceptance signature invalid: {exc}"
+    return None
+
+
+def apply_acceptance(receipt: Receipt, acceptance: Acceptance) -> Receipt:
+    """Attach a verified client artifact to the change order."""
+    if receipt.acceptance is not None:
+        raise ValueError("receipt already has a client acceptance")
+    problem = acceptance_error(receipt, acceptance)
+    if problem is not None:
+        raise ValueError(problem)
+    return receipt.model_copy(update={"acceptance": acceptance})
+
+
+def countersign(
+    receipt: Receipt,
+    keyring: Keyring,
+    issuer: str,
+    *,
+    accepted_at: datetime | None = None,
+) -> Receipt:
+    """Build and attach a client acceptance from a local private key.
+
+    Kept for offline tests and client-side tooling. The issuer service does not
+    call this with a stored key; it ingests the signed artifact instead.
+    """
+    return apply_acceptance(
+        receipt, build_acceptance(receipt, keyring, issuer, accepted_at=accepted_at)
+    )
+
+
+def acceptance_token(acceptance: Acceptance) -> str:
+    """Compact, pasteable form of an acceptance for a Switch room message."""
+    payload = canonical_json(acceptance).encode("utf-8")
+    return ACCEPTANCE_TOKEN_PREFIX + base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def parse_acceptance_token(token: str) -> Acceptance:
+    """Parse a token produced by :func:`acceptance_token`."""
+    value = token.strip()
+    if value.upper().startswith("SCOPE ACCEPT"):
+        value = value[len("SCOPE ACCEPT") :].strip()
+    if not value.startswith(ACCEPTANCE_TOKEN_PREFIX):
+        raise ValueError("not a Scope Guard acceptance token")
+    encoded = value[len(ACCEPTANCE_TOKEN_PREFIX) :]
+    padding = "=" * (-len(encoded) % 4)
+    try:
+        raw = base64.urlsafe_b64decode((encoded + padding).encode("ascii"))
+        return Acceptance.model_validate_json(raw)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"invalid acceptance token: {exc}") from exc
 
 
 def receipt_public_key(receipt: Receipt) -> Ed25519PublicKey:
@@ -404,24 +535,29 @@ def verify_receipt(
             f"acceptance algorithm={acceptance.algorithm}",
         )
         add(
+            "acceptance_receipt_binding",
+            acceptance.receipt_id == receipt.body.receipt_id,
+            f"acceptance names change order {acceptance.receipt_id}",
+        )
+        add(
+            "acceptance_body_hash_binding",
+            acceptance.body_hash == receipt.body_hash,
+            "acceptance is bound to this exact signed body hash",
+        )
+        add(
             "acceptance_key_distinct",
             acceptance.public_key != receipt.public_key,
             "client acceptance key is distinct from the issuer key",
         )
-        try:
-            client_key = public_key_from_b64(acceptance.public_key)
-            client_key.verify(
-                base64.urlsafe_b64decode(acceptance.signature.encode("ascii")),
-                acceptance_message(
-                    receipt.body_hash, acceptance.issuer, acceptance.public_key
-                ).encode("utf-8"),
-            )
-            accepted = True
-            detail = f"client acceptance verifies for {acceptance.issuer}"
-        except (InvalidSignature, ValueError, TypeError) as exc:
-            accepted = False
-            detail = f"client acceptance invalid: {exc}"
-        add("acceptance", accepted, detail)
+        problem = acceptance_error(receipt, acceptance)
+        add(
+            "acceptance",
+            problem is None,
+            f"client acceptance verifies for {acceptance.issuer} "
+            f"({public_key_fingerprint(acceptance.public_key)[:23]}...)"
+            if problem is None
+            else f"client acceptance invalid: {problem}",
+        )
         if expected_counter_public_key is not None:
             add(
                 "pinned_client_key",

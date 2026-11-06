@@ -101,18 +101,18 @@ Change order **`co_5d7602a73cba86de6db28804`** is issued and signed with Ed25519
 | RATE | 12.00% discount on this change order (5,760.00 USD off a 48,000.00 USD subtotal). | -5,760.00 | Quote valid for 14 days.; Discount applies only to the line items in this change order.; No further discount without a written finance exception.; Discount capped at 12.00% without a written finance exception. |
 | TERMS | Unlimited liability: mutual liability capped at 2x fees; unlimited liability is refused. Custom security addendum included. | +6,000.00 | Legal review is required before signature.; Liability is mutual and capped at the policy maximum.; The security addendum is limited to the scope in this change order. |
 
-**Subtotal 48,000.00; discount -5,760.00; total 42,240.00 USD.** Body hash `92670ee71a30115abcfd28b0...`; issuer signature `TKh3uKtemUVyM3lDArWaW6Ql...`.
+**Subtotal 48,000.00; discount -5,760.00; total 42,240.00 USD.** Body hash `92670ee71a30115abcfd28b0...`; issuer signature `TWYaYy-FYwthXR3fqhoeiREl...`.
 
-## 9. The client countersigns the change order
+## 9. The client countersigns with a key the issuer never holds
 
-Jordan Reyes (Northwind Health) countersigns `co_5d7602a73cba86de6db28804`. The acceptance is a second Ed25519 signature over the issuer's body hash, the issuer name, and the client's public key.
+Jordan Reyes (Northwind Health) signs `co_5d7602a73cba86de6db28804` on the client machine. The private key was created outside the issuer's home, used once, and deleted; the Clerk verified the pasted token with the registered public key alone.
 
-| Party | Signs | Key | Signature |
+| Party | Signs | Key | Fingerprint |
 | --- | --- | --- | --- |
-| Scope Guard | the complete change-order body | `OmKWvBDcafm-qKLp...` | `TKh3uKtemUVyM3lD...` |
-| Northwind Health (Jordan Reyes) | the issuer's body hash | `GgX6CHMzN1CW-4qy...` | `eAccCXnxj4IkY32p...` |
+| Scope Guard | the complete change-order body | `8JQwCV9o0YHJwhz4...` | issuer key |
+| Northwind Health (Jordan Reyes) | receipt id + body hash + signer + timestamp | `z7q6OEiywrOLnvg9...` | `sha256:3ddd9a324f2c2be4...` |
 
-A one-party receipt is a promise. A two-party change order is an agreement. The difference is one more signature and a much stronger story in a dispute.
+A one-party receipt is a promise. A two-party change order is an agreement. The difference is a second signer who controls a key the issuer cannot use.
 
 ## 10. Verification is adversarial, not decorative
 
@@ -130,12 +130,15 @@ A one-party receipt is a promise. A two-party change order is an agreement. The 
 | amounts_balance | PASS | subtotal 48,000.00 USD, discount -5,760.00, total 42,240.00 |
 | unexpired | PASS | expires at 2026-12-04T09:00:00+00:00 |
 | acceptance_algorithm | PASS | acceptance algorithm=Ed25519 |
+| acceptance_receipt_binding | PASS | acceptance names change order co_5d7602a73cba86de6db28804 |
+| acceptance_body_hash_binding | PASS | acceptance is bound to this exact signed body hash |
 | acceptance_key_distinct | PASS | client acceptance key is distinct from the issuer key |
-| acceptance | PASS | client acceptance verifies for Jordan Reyes |
+| acceptance | PASS | client acceptance verifies for Jordan Reyes (sha256:3ddd9a324f2c2be4...) |
 | pinned_client_key | PASS | client key matches the pinned client key |
 | packet_rehash | PASS | local packet rehashes to the change order's packet hash |
 | packet_version | PASS | change order binds packet v2 |
 | line_items_match_packet | PASS | change order line items match the local packet |
+| client_registered | PASS | acceptance key matches registered client Jordan Reyes |
 | recorded | PASS | change order is recorded in the local ledger |
 
 Now edit one character of an approved scope line and verify again: **FAIL** - Change order failed verification: body_hash, amounts_balance. The signed body hash catches it without trusting the database.
@@ -150,7 +153,7 @@ Now edit one character of an approved scope line and verify again: **FAIL** - Ch
 Change order: `co_5d7602a73cba86de6db28804`
 Packet: v2 / `2d3f89633746db1f...`
 Policy: `scope-policy-v1@v1`
-Status: Countersigned by Jordan Reyes
+Status: Countersigned by Jordan Reyes (sha256:3ddd9a324f2c2be4...)
 Total: **42,240.00 USD** (subtotal 48,000.00, discount -5,760.00)
 
 **Signed line items**
@@ -180,7 +183,7 @@ Notice what is **not** there: no GA date, no two-week acceleration, no 20% disco
 
 ## 12. The audit chain closes
 
-**Audit:** audit chain intact (27 events). Each event chains to the previous one; editing history breaks verification. The change order also links to the previous change order for this engagement.
+**Audit:** audit chain intact (28 events). Each event chains to the previous one; editing history breaks verification. The change order also links to the previous change order for this engagement.
 
 ### What just happened
 - Four requests, four dated evidence items, one deterministic policy.

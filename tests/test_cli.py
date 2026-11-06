@@ -44,6 +44,9 @@ def test_parser_names_every_command() -> None:
         "approve",
         "sync",
         "seal",
+        "client-keygen",
+        "register-client",
+        "client-accept",
         "countersign",
         "verify",
         "verify-audit",
@@ -221,6 +224,108 @@ def test_cli_verification_detects_a_tampered_export(
     result = json.loads(capsys.readouterr().out)
     assert result["ok"] is False
     assert "body_hash" in result["summary"]
+
+
+def test_cli_independent_client_acceptance(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    home = tmp_path / "issuer-home"
+    exported = tmp_path / "receipt.json"
+    client_private = tmp_path / "client" / "jordan.pem"
+    client_public = tmp_path / "client" / "jordan.pub"
+    acceptance_file = tmp_path / "acceptance.json"
+
+    for command in [
+        ("ingest",),
+        ("assess",),
+        ("challenge",),
+        ("revise",),
+        ("challenge",),
+        ("sync", "--messages", str(MESSAGES)),
+        ("seal", "--export", str(exported)),
+    ]:
+        assert run(*base(home, *command)) == 0
+    assert exported.exists()
+
+    assert (
+        run(
+            *base(
+                home,
+                "client-keygen",
+                "--out",
+                str(client_private),
+                "--public-out",
+                str(client_public),
+            )
+        )
+        == 0
+    )
+    assert client_private.exists() and client_public.exists()
+    assert not (home / "keys" / "client-ed25519.pem").exists()
+
+    assert (
+        run(
+            *base(
+                home,
+                "register-client",
+                "--client",
+                "Jordan Reyes",
+                "--public-key",
+                str(client_public),
+            )
+        )
+        == 0
+    )
+    assert (home / "clients" / "northwind-2026.json").exists()
+
+    assert (
+        run(
+            *base(
+                home,
+                "client-accept",
+                "--receipt",
+                str(exported),
+                "--client",
+                "Jordan Reyes",
+                "--key",
+                str(client_private),
+                "--out",
+                str(acceptance_file),
+            )
+        )
+        == 0
+    )
+    assert acceptance_file.exists()
+    capsys.readouterr()  # discard setup output; the next command is the one under test
+
+    assert (
+        run(
+            *base(
+                home,
+                "countersign",
+                "--acceptance",
+                str(acceptance_file),
+            )
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["acceptance"]["issuer"] == "Jordan Reyes"
+    assert payload["acceptance"]["receipt_id"] == payload["body"]["receipt_id"]
+
+    assert (
+        run(
+            *base(
+                home,
+                "verify",
+                "--receipt",
+                "latest",
+                "--require-acceptance",
+                "--pinned-client-key",
+            )
+        )
+        == 0
+    )
 
 
 def test_cli_json_is_machine_readable(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

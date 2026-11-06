@@ -28,6 +28,7 @@ def test_demo_runs_end_to_end_and_writes_a_transcript(repo_root: Path, tmp_path:
     assert "## 4. Red Team breaks the packet" in text
     assert "## 5. Revision invalidates every earlier signature" in text
     assert "## 8. Clerk seals a two-party change order" in text
+    assert "## 9. The client countersigns with a key the issuer never holds" in text
     assert "## 10. Verification is adversarial, not decorative" in text
     assert "## 12. The audit chain closes" in text
 
@@ -36,6 +37,8 @@ def test_demo_runs_end_to_end_and_writes_a_transcript(repo_root: Path, tmp_path:
     assert text in written
     receipt_file = tmp_path / "receipt.json"
     assert receipt_file.exists()
+    assert not (home / "keys" / "client-ed25519.pem").exists()
+    assert (home / "clients" / "northwind-2026.json").exists()
 
     # The demo leaves a real, verifiable ledger behind.
     paths = ScopePaths.discover(root=repo_root, home=home)
@@ -69,3 +72,5 @@ def test_demo_without_a_transcript_still_runs(repo_root: Path, tmp_path: Path) -
     assert len(text) > 2_000
     assert "Change order" in text
     assert "SCOPE ACCEPT Jordan Reyes" not in text
+    assert "client machine" in text
+    assert "deleted" in text

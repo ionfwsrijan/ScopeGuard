@@ -19,6 +19,11 @@ from typing import Any, Protocol
 
 from scopeguard.errors import GateError, ScopeError, StateError
 from scopeguard.models import SwitchMessage
+from scopeguard.receipt import (
+    ACCEPTANCE_TOKEN_PREFIX,
+    parse_acceptance_token,
+    public_key_fingerprint,
+)
 from scopeguard.service import ScopeService
 from scopeguard.switch.client import messages_from_context
 
@@ -65,8 +70,8 @@ class Clerk:
             text = message.body.strip()
             upper = text.upper()
             if upper.startswith("SCOPE ACCEPT"):
-                issuer = text[len("SCOPE ACCEPT") :].strip().strip(":") or message.sender_name
-                self.client.post_message(self.scope_room_id, self.accept_text(issuer))
+                token = text[len("SCOPE ACCEPT") :].strip().strip(":")
+                self.client.post_message(self.scope_room_id, self.accept_text(token))
             elif upper.startswith("SCOPE SEAL") or upper == "SCOPE HANDOFF":
                 if upper.startswith("SCOPE HANDOFF"):
                     self.client.post_message(self.scope_room_id, self.handoff_text())
@@ -142,19 +147,30 @@ class Clerk:
             f"discount {receipt.body.discount_total:,.2f}).",
             f"Body hash `{receipt.body_hash[:24]}...`",
             f"Verify locally: `scopeguard verify --receipt {receipt.body.receipt_id}`",
-            "Client, reply `SCOPE ACCEPT <your name>` to countersign. "
-            "Nothing crosses into delivery until the client accepts.",
+            "Client, run `scopeguard client-accept` with your private key and paste the "
+            "resulting `SCOPE ACCEPT <token>` here. Nothing crosses into delivery until "
+            "the client accepts.",
         ]
         return "\n".join(lines)
 
-    def accept_text(self, issuer: str) -> str:
+    def accept_text(self, token: str) -> str:
+        if not token or not token.strip().startswith(ACCEPTANCE_TOKEN_PREFIX):
+            return (
+                "**Acceptance not recorded.** A name alone is not a signature. "
+                'Run `scopeguard client-accept --receipt <file> --client "<name>" '
+                "--key <your-private-key>` and paste `SCOPE ACCEPT <token>`."
+            )
         try:
-            receipt = self.service.countersign(self.engagement_id, issuer)
+            acceptance = parse_acceptance_token(token)
+            receipt = self.service.accept_client_artifact(self.engagement_id, acceptance)
         except ScopeError as exc:
             return f"**Acceptance not recorded.** {exc.message}"
+        except ValueError as exc:
+            return f"**Acceptance not recorded.** {exc}"
         lines = [
-            f"**Accepted by {receipt.acceptance.issuer if receipt.acceptance else issuer}.** "
-            f"Change order `{receipt.body.receipt_id}` is now two-party signed.",
+            f"**Accepted by {receipt.acceptance.issuer if receipt.acceptance else acceptance.issuer}.** "
+            f"Change order `{receipt.body.receipt_id}` is now two-party signed "
+            f"with client key `{public_key_fingerprint(acceptance.public_key)[:23]}...`.",
         ]
         if self.delivery_room_id:
             self.client.post_message(self.delivery_room_id, self.handoff_text())

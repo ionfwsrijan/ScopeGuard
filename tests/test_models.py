@@ -331,7 +331,14 @@ def test_receipt_body_and_acceptance_round_trip() -> None:
         body_hash=canonical_hash(body),
         signature="sig",
         public_key="key",
-        acceptance=Acceptance(issuer="Jordan", public_key="ckey", signature="csig"),
+        acceptance=Acceptance(
+            issuer="Jordan",
+            public_key="ckey",
+            signature="csig",
+            receipt_id=body.receipt_id,
+            body_hash=canonical_hash(body),
+            accepted_at=datetime(2026, 11, 4, 9, 0, tzinfo=UTC),
+        ),
     )
     assert receipt.body.total == 30000.0
     assert receipt.acceptance is not None

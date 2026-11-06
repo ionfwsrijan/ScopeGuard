@@ -7,12 +7,13 @@ implementation.
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from scopeguard.assess import assess_engagement
 from scopeguard.challenge import apply_revisions, challenge_packet, gate_packet
@@ -20,6 +21,7 @@ from scopeguard.clock import utcnow
 from scopeguard.errors import ApprovalError, ConfigError, GateError, NotFoundError, StateError
 from scopeguard.fixtures import load_approvers, load_engagement, load_evidence
 from scopeguard.models import (
+    Acceptance,
     Approval,
     ApprovalStatus,
     Approvers,
@@ -38,15 +40,16 @@ from scopeguard.models import (
 from scopeguard.policy import Policy
 from scopeguard.receipt import (
     Keyring,
+    apply_acceptance,
+    build_acceptance,
     build_receipt,
     canonical_hash,
     expected_phrase,
     packet_hash,
     parse_approval_phrase,
+    public_key_fingerprint,
+    public_key_from_b64,
     verify_receipt,
-)
-from scopeguard.receipt import (
-    countersign as countersign_receipt,
 )
 from scopeguard.store import Store
 
@@ -68,12 +71,15 @@ class ScopePaths:
         return self.home / "keys" / "ed25519.pem"
 
     @property
-    def client_key(self) -> Path:
-        return self.home / "keys" / "client-ed25519.pem"
-
-    @property
     def receipts(self) -> Path:
         return self.home / "receipts"
+
+    @property
+    def clients(self) -> Path:
+        return self.home / "clients"
+
+    def client_record(self, engagement_id: str) -> Path:
+        return self.clients / f"{engagement_id}.json"
 
     @classmethod
     def discover(
@@ -98,7 +104,7 @@ class ScopePaths:
         )
 
     def ensure(self) -> None:
-        for folder in (self.home, self.receipts, self.key.parent):
+        for folder in (self.home, self.receipts, self.key.parent, self.clients):
             folder.mkdir(parents=True, exist_ok=True)
 
 
@@ -139,7 +145,6 @@ class ScopeService:
         paths: ScopePaths,
         now: Callable[[], datetime] = utcnow,
         keyring: Keyring | None = None,
-        client_keyring: Keyring | None = None,
     ) -> None:
         self.store = store
         self.policy = policy
@@ -147,7 +152,6 @@ class ScopeService:
         self.paths = paths
         self.now = now
         self._keyring = keyring
-        self._client_keyring = client_keyring
 
     # --------------------------------------------------------------- setup
     @classmethod
@@ -157,7 +161,6 @@ class ScopeService:
         *,
         now: Callable[[], datetime] = utcnow,
         keyring: Keyring | None = None,
-        client_keyring: Keyring | None = None,
     ) -> ScopeService:
         policy = Policy.load(paths.policy)
         approvers = load_approvers(paths.approvers)
@@ -169,7 +172,6 @@ class ScopeService:
             paths=paths,
             now=now,
             keyring=keyring,
-            client_keyring=client_keyring,
         )
 
     def close(self) -> None:
@@ -188,12 +190,90 @@ class ScopeService:
             self._keyring = Keyring.load_or_create(self.paths.key)
         return self._keyring
 
-    @property
-    def client_keyring(self) -> Keyring:
-        if self._client_keyring is None:
-            self.paths.ensure()
-            self._client_keyring = Keyring.load_or_create(self.paths.client_key)
-        return self._client_keyring
+    # ---------------------------------------------------- client identity
+    def registered_client(self, engagement_id: str) -> dict[str, Any] | None:
+        """The client public key registered for this engagement, if any."""
+        path = self.paths.client_record(engagement_id)
+        if not path.exists():
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+
+    def register_client(
+        self,
+        engagement_id: str,
+        signer: str,
+        public_key: str,
+        *,
+        source: str = "cli",
+    ) -> dict[str, Any]:
+        """Record the named client's public key out of band.
+
+        Registration is deliberately separate from acceptance. The issuer gets
+        a public key and a signer name; the private key never leaves the client.
+        """
+        clean = signer.strip()
+        if not clean:
+            raise ConfigError("a client registration needs a named signer")
+        public_key_from_b64(public_key)  # reject malformed keys before writing
+        self.store.load_engagement(engagement_id)
+        existing = self.registered_client(engagement_id)
+        if existing is not None:
+            same = (
+                str(existing.get("signer", "")).casefold() == clean.casefold()
+                and existing.get("public_key") == public_key
+            )
+            if not same:
+                raise ConfigError(
+                    "a different client identity is already registered for this engagement",
+                    hint="Client keys are pinned. Start a new engagement key or use the "
+                    "registered signer.",
+                )
+            return existing
+        record = {
+            "engagement_id": engagement_id,
+            "signer": clean,
+            "public_key": public_key,
+            "fingerprint": public_key_fingerprint(public_key),
+            "registered_at": self.now().astimezone(UTC).replace(microsecond=0).isoformat(),
+        }
+        path = self.paths.client_record(engagement_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        self.store.audit(
+            "client.registered",
+            "scopeguard",
+            {
+                "engagement_id": engagement_id,
+                "signer": clean,
+                "fingerprint": record["fingerprint"],
+                "source": source,
+            },
+        )
+        return record
+
+    def _require_registered_client(
+        self, engagement_id: str, acceptance: Acceptance
+    ) -> dict[str, Any]:
+        record = self.registered_client(engagement_id)
+        if record is None:
+            raise ConfigError(
+                "no client key is registered for this engagement",
+                hint="The client runs `scopeguard client-keygen`, sends the public key, "
+                "and the issuer runs `scopeguard register-client` before acceptance.",
+            )
+        if str(record.get("signer", "")).casefold() != acceptance.issuer.casefold():
+            raise ConfigError(
+                f"acceptance names {acceptance.issuer!r}, but the registered client is "
+                f"{record.get('signer')!r}"
+            )
+        if record.get("public_key") != acceptance.public_key:
+            raise ConfigError(
+                "acceptance key does not match the registered client key",
+                hint="The signature may be valid, but it is not the client this engagement "
+                "registered.",
+            )
+        return record
 
     # --------------------------------------------------------------- intake
     def ingest_fixture(self, name: str = "northwind") -> tuple[Engagement, EvidenceBook]:
@@ -570,25 +650,62 @@ class ScopeService:
         engagement_id: str,
         issuer: str,
         *,
-        keyring: Keyring | None = None,
+        keyring: Keyring,
         receipt_id: str | None = None,
     ) -> Receipt:
-        """Add a named client's acceptance to the latest sealed change order."""
+        """Sign acceptance locally with a client-held key, then record it.
+
+        The keyring must be the client's own key. The issuer home never creates
+        or loads a client private key; the registered public key is the only
+        client material it stores.
+        """
         receipt = (
             self.store.load_receipt(receipt_id)
             if receipt_id
             else self.store.latest_receipt(engagement_id)
         )
-        updated = countersign_receipt(receipt, keyring or self.client_keyring, issuer)
+        acceptance = build_acceptance(receipt, keyring, issuer, accepted_at=self.now())
+        return self.accept_client_artifact(engagement_id, acceptance, receipt=receipt)
+
+    def accept_client_artifact(
+        self,
+        engagement_id: str,
+        acceptance: Acceptance,
+        *,
+        receipt: Receipt | None = None,
+        source: str = "artifact",
+    ) -> Receipt:
+        """Verify and attach a client-signed acceptance artifact.
+
+        The artifact carries its own receipt id and body hash, so the issuer
+        cannot move an acceptance to a different change order. The registered
+        client key is checked before the signature is applied.
+        """
+        self._require_registered_client(engagement_id, acceptance)
+        target = receipt
+        if target is None:
+            try:
+                target = self.store.load_receipt(acceptance.receipt_id)
+            except NotFoundError:
+                target = self.store.latest_receipt(engagement_id)
+        if target.body.engagement_id != engagement_id:
+            raise ConfigError(
+                "that acceptance belongs to a different engagement",
+                hint=f"Receipt engagement: {target.body.engagement_id}",
+            )
+        updated = apply_acceptance(target, acceptance)
         self.store.save_receipt(updated)
         self.store.audit(
             "change_order.countersigned",
-            issuer,
+            acceptance.issuer,
             {
-                "engagement_id": receipt.body.engagement_id,
+                "engagement_id": updated.body.engagement_id,
                 "receipt_id": updated.body.receipt_id,
                 "body_hash": updated.body_hash,
-                "client_public_key": updated.acceptance.public_key if updated.acceptance else None,
+                "client_public_key": acceptance.public_key,
+                "client_fingerprint": public_key_fingerprint(acceptance.public_key),
+                "accepted_at": acceptance.accepted_at.isoformat(),
+                "source": source,
             },
         )
         return updated
@@ -602,9 +719,19 @@ class ScopeService:
         require_acceptance: bool = False,
         pinned_key: bool = False,
         pinned_client_key: bool = False,
+        expected_client_public_key: str | None = None,
     ) -> VerificationResult:
         expected = self.keyring.public_key_b64 if pinned_key else None
-        expected_client = self.client_keyring.public_key_b64 if pinned_client_key else None
+        expected_client = expected_client_public_key
+        if pinned_client_key:
+            record = self.registered_client(receipt.body.engagement_id)
+            registered = (
+                str(record.get("public_key")) if record is not None else "unregistered-client-key"
+            )
+            if expected_client is None:
+                expected_client = registered
+            elif registered != expected_client:
+                expected_client = "registered-key-does-not-match-supplied-key"
         result = verify_receipt(
             receipt,
             expected_public_key=expected,
@@ -657,6 +784,27 @@ class ScopeService:
                     detail="change order line items match the local packet",
                 )
             )
+        acceptance = receipt.acceptance
+        if acceptance is not None:
+            record = self.registered_client(receipt.body.engagement_id)
+            if record is None:
+                result.checks.append(
+                    VerificationCheck(
+                        code="client_registered",
+                        ok=not pinned_client_key,
+                        detail="no client key is registered for this engagement"
+                        if pinned_client_key
+                        else "client key registration is not present locally",
+                    )
+                )
+            else:
+                result.checks.append(
+                    VerificationCheck(
+                        code="client_registered",
+                        ok=str(record.get("public_key")) == acceptance.public_key,
+                        detail=f"acceptance key matches registered client {record.get('signer')}",
+                    )
+                )
         recorded = {
             item.body.receipt_id for item in self.store.list_receipts(receipt.body.engagement_id)
         }
@@ -678,16 +826,31 @@ class ScopeService:
         return result
 
     def verify_latest(
-        self, engagement_id: str, **kwargs: bool
+        self,
+        engagement_id: str,
+        *,
+        require_unexpired: bool = False,
+        require_acceptance: bool = False,
+        pinned_key: bool = False,
+        pinned_client_key: bool = False,
+        expected_client_public_key: str | None = None,
     ) -> tuple[Receipt, VerificationResult]:
         receipt = self.store.latest_receipt(engagement_id)
-        return receipt, self.verify(receipt, **kwargs)
+        return receipt, self.verify(
+            receipt,
+            require_unexpired=require_unexpired,
+            require_acceptance=require_acceptance,
+            pinned_key=pinned_key,
+            pinned_client_key=pinned_client_key,
+            expected_client_public_key=expected_client_public_key,
+        )
 
     # -------------------------------------------------------------- handoff
     def handoff_text(self, engagement_id: str) -> str:
         receipt = self.store.latest_receipt(engagement_id)
         accepted = (
-            f"Countersigned by {receipt.acceptance.issuer}"
+            f"Countersigned by {receipt.acceptance.issuer} "
+            f"({public_key_fingerprint(receipt.acceptance.public_key)[:23]}...)"
             if receipt.acceptance is not None
             else "Awaiting client countersignature"
         )

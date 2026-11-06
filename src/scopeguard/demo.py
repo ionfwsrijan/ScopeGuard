@@ -16,6 +16,12 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.rule import Rule
 
+from scopeguard.receipt import (
+    Keyring,
+    acceptance_token,
+    build_acceptance,
+    public_key_fingerprint,
+)
 from scopeguard.service import ScopePaths, ScopeService, fixed_clock
 from scopeguard.switch.clerk import Clerk
 from scopeguard.switch.fake import FakeSwitch
@@ -408,38 +414,53 @@ def run_demo(
     )
 
     # ----------------------------------------------------------- countersign
-    step("9. The client countersigns the change order")
-    switch.human(scope_room.id, "Jordan", "SCOPE ACCEPT Jordan Reyes")
+    step("9. The client countersigns with a key the issuer never holds")
+    # The client key is created outside the issuer's home, used to sign the
+    # acceptance locally, and then deleted from this machine. The Clerk only
+    # sees the public key and the resulting token.
+    client_key_path = home.parent / f"{home.name}-client-jordan.pem"
+    client_key = Keyring.generate(client_key_path)
+    service.register_client(
+        engagement.id,
+        "Jordan Reyes",
+        client_key.public_key_b64,
+        source="demo:out-of-band",
+    )
+    acceptance = build_acceptance(receipt, client_key, "Jordan Reyes", accepted_at=service.now())
+    token = acceptance_token(acceptance)
+    client_key_path.unlink()
+    switch.human(scope_room.id, "Jordan", f"SCOPE ACCEPT {token}")
     clerk.run_once()
     receipt = service.store.latest_receipt(engagement.id)
-    acceptance = receipt.acceptance
+    recorded = receipt.acceptance
     say(
-        f"Jordan Reyes (Northwind Health) countersigns `{receipt.body.receipt_id}`. "
-        "The acceptance is a second Ed25519 signature over the issuer's body hash, the "
-        "issuer name, and the client's public key."
+        f"Jordan Reyes (Northwind Health) signs `{receipt.body.receipt_id}` on the "
+        "client machine. The private key was created outside the issuer's home, used "
+        "once, and deleted; the Clerk verified the pasted token with the registered "
+        "public key alone."
     )
     say(
         _table(
-            ["Party", "Signs", "Key", "Signature"],
+            ["Party", "Signs", "Key", "Fingerprint"],
             [
                 [
                     "Scope Guard",
                     "the complete change-order body",
                     f"`{receipt.public_key[:16]}...`",
-                    f"`{receipt.signature[:16]}...`",
+                    "issuer key",
                 ],
                 [
-                    f"Northwind Health ({acceptance.issuer if acceptance else 'n/a'})",
-                    "the issuer's body hash",
-                    f"`{acceptance.public_key[:16] if acceptance else ''}...`",
-                    f"`{acceptance.signature[:16] if acceptance else ''}...`",
+                    f"Northwind Health ({recorded.issuer if recorded else 'n/a'})",
+                    "receipt id + body hash + signer + timestamp",
+                    f"`{recorded.public_key[:16] if recorded else ''}...`",
+                    f"`{public_key_fingerprint(recorded.public_key)[:23] if recorded else ''}...`",
                 ],
             ],
         )
     )
     say(
         "A one-party receipt is a promise. A two-party change order is an agreement. "
-        "The difference is one more signature and a much stronger story in a dispute."
+        "The difference is a second signer who controls a key the issuer cannot use."
     )
 
     # ---------------------------------------------------------------- verify

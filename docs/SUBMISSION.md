@@ -22,8 +22,7 @@ countersigned change order crosses the link into delivery.
 ```bash
 python -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"    # Windows: .venv\Scripts\python
-.venv/bin/scopeguard demo --reset
-.venv/bin/scopeguard --root . --home .scopeguard/demo serve --port 8787
+.venv/bin/scopeguard serve --demo --reset --port 8787
 ```
 
 Then open `http://127.0.0.1:8787/`.
@@ -33,7 +32,7 @@ What to look for, in order:
 1. The transcript: two signatures on packet v1 are invalidated by a revision.
 2. The engagement page: packet v2, 8 valid signatures, 2 stale, 0 blocking
    findings.
-3. The change order: Ed25519 issuer signature, client countersignature, and 19
+3. The change order: Ed25519 issuer signature, client-held countersignature, and 22
    passing verification checks with both keys pinned.
 4. The tamper step in the demo: one character changed, verification fails.
 5. The handoff: only four signed line items enter delivery; the refused and
@@ -89,7 +88,7 @@ scopeguard --home .scopeguard/standalone verify \
 | Is the story clear? | README opens with the pain, the Northwind story, the flow, and the change order. |
 | Is the demo tight? | A 3-minute script in `docs/DEMO.md` with exact beats, narration, and fallback hashes. |
 | Are the visuals good? | Ledger, engagement, and change-order views with a consistent palette and checked-in screenshots. |
-| Is it honest? | A dedicated validity document and a demo that labels the simulated transport. |
+| Is it honest? | A dedicated validity document and a demo that labels the simulated transport. The client signs acceptance with a key kept on the client machine. |
 
 ## The money shot
 
@@ -169,7 +168,7 @@ but the main submission is Track 01.
 - [x] `README.md` — pain, Northwind story, quick start, trust model, honesty
 - [x] `demo/transcript.md` — full 12-step run with countersignature and tamper
 - [x] `demo/receipt.json` — a real two-party change order, verifiable standalone
-- [x] `demo/images/01-room.png` — ledger
+- [x] `demo/images/01-room.png` — redesigned dashboard
 - [x] `demo/images/02-case.png` — engagement, packet, signatures, findings
 - [x] `demo/images/03-receipt.png` — signed change order and verification
 - [x] `templates/scopeguard.template.yaml` — five agents, two linked rooms
