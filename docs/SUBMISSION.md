@@ -64,7 +64,7 @@ scopeguard --home .scopeguard/standalone verify \
 
 | Judge question | Evidence |
 | --- | --- |
-| Is it built, not mocked? | 328 tests; CLI, API, UI, Switch client, headless Clerk, and demo. |
+| Is it built, not mocked? | Test coverage spans the CLI, API, UI, Switch client, headless Clerk, and demo. The bundled conversation transport is explicitly simulated. |
 | Is the core correct? | Typed models; pure pricing; canonical JSON; SHA-256 hash chain; Ed25519 issuer and client signatures. |
 | Does it handle failure? | Tamper tests, stale signatures, wrong roles, duplicates, expired evidence, audit tamper, HTTP errors, missing keys. |
 | Is the code quality high? | `ruff check .` and `ruff format --check .` clean; `mypy` clean on 20 source files; CI on Windows and Linux, Python 3.11–3.13. |
@@ -86,7 +86,7 @@ scopeguard --home .scopeguard/standalone verify \
 | Judge question | Evidence |
 | --- | --- |
 | Is the story clear? | README opens with the pain, the Northwind story, the flow, and the change order. |
-| Is the demo tight? | A 3-minute script in `docs/DEMO.md` with exact beats, narration, and fallback hashes. |
+| Is the demo tight? | The finished 1:38 narrated 4K60 walkthrough is in `demo/video/scopeguard-demo-final.mp4`; `docs/DEMO.md` contains the deeper judge path and live-room script. |
 | Are the visuals good? | Ledger, engagement, and change-order views with a consistent palette and checked-in screenshots. |
 | Is it honest? | A dedicated validity document and a demo that labels the simulated transport. The client signs acceptance with a key kept on the client machine. |
 
@@ -182,7 +182,8 @@ but the main submission is Track 01.
 - [x] `docs/BLOG.md`
 - [x] `LICENSE` (MIT)
 - [x] `.github/workflows/ci.yml`
-- [x] 328 tests, ruff clean, mypy clean
+- [x] Test, lint, and type-check commands documented in the quality gates
+- [x] `demo/video/scopeguard-demo-final.mp4` — finished narrated 4K60 walkthrough
 
 ## Pre-submit checks
 
@@ -190,7 +191,7 @@ but the main submission is Track 01.
 2. `python -m pytest -q` is green.
 3. `ruff check .`, `ruff format --check .`, and `mypy` are clean.
 4. All three screenshots render and are committed.
-5. The video says "deterministic replay" once, plainly.
+5. The video is linked from the README and describes the replay accurately.
 6. No secrets, tokens, `.venv`, `.scopeguard`, or `.reference-switch` are
    committed.
 7. The repo link is public or shared with the judges.

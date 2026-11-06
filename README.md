@@ -159,7 +159,7 @@ creates the agents, rooms, and link.
 | CLI | `init`, `ingest`, `assess`, `challenge`, `revise`, `sign`, `sync`, `seal`, `client-keygen`, `register-client`, `client-accept`, `countersign`, `verify`, `verify-audit`, `handoff`, `switch-check`, `export`, `demo`, `serve`, `clerk` |
 | Web UI | Read-only ledger, engagement view, signed change order, verifier |
 | JSON API | Engagement, packet, receipt, verification, audit, health |
-| Tests | 304 tests, ruff and mypy clean, Python 3.11-3.13 |
+| Tests | Core, CLI, API, Clerk, transport, and demo coverage; run the quality gates below |
 
 ## The trust model
 
@@ -186,6 +186,12 @@ boundaries of what the demo proves.
 | --- | --- | --- |
 | ![Ledger](demo/images/01-room.png) | ![Engagement](demo/images/02-case.png) | ![Change order](demo/images/03-receipt.png) |
 
+## Full demo video
+
+[Watch the complete 1:38 walkthrough (4K, 60 fps)](demo/video/scopeguard-demo-final.mp4).
+It includes the branded opening and closing, narration, captions, and direct
+captures of the running Scope Guard interface.
+
 ## Project layout
 
 ```
@@ -200,7 +206,7 @@ src/scopeguard/
   api/             FastAPI UI and JSON API
 fixtures/northwind/   engagement, evidence, approvers, room messages
 policies/             scope_policy_v1.yaml
-tests/                304 tests across the core, CLI, API, Clerk, and demo
+tests/                coverage for the core, CLI, API, Clerk, and demo
 ```
 
 ## Quality gates

@@ -1,0 +1,1 @@
+Switch coordinates Scout, Pricer, Red Team, Clerk, and Delivery. The deterministic core prices the work; named humans approve the packet’s exact hash.

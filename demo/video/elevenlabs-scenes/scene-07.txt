@@ -1,0 +1,1 @@
+The signed order contains four priced items, an issuer signature, and the client’s separate countersignature. Verification recomputes its body hash, receipt ID, amounts, and signatures. Any edit would break the hash; only accepted terms pass to delivery.

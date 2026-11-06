@@ -1,0 +1,31 @@
+1
+00:00:00,000 --> 00:00:04,000
+Scope Guard. Every extra scope item gets a price.
+
+2
+00:00:04,000 --> 00:00:13,000
+Before a $120,000 launch, Northwind’s client asks for mobile, a rush, twenty percent off, and unlimited liability.
+
+3
+00:00:13,000 --> 00:00:30,000
+The live workspace brings the Northwind engagement, current packet, signed order, and audit status into one view. Open the case to compare each priced commitment, see who must approve, and spot any stale signatures.
+
+4
+00:00:30,000 --> 00:00:52,000
+Each request has a clear decision, price, evidence, and required approvers. Mobile becomes a beta, rush is limited to one week, the discount narrows to twelve percent, and unlimited liability is refused. Those boundaries become the terms that delivery can rely on.
+
+5
+00:00:52,000 --> 00:01:04,000
+Switch coordinates Scout, Pricer, Red Team, Clerk, and Delivery. The deterministic core prices the work; named humans approve the packet’s exact hash.
+
+6
+00:01:04,000 --> 00:01:16,000
+The first twenty-percent discount cuts gross margin to 27.5%, below the 30% floor. Red Team blocks it. The 12% revision protects $3,840.
+
+7
+00:01:16,000 --> 00:01:34,000
+The signed order contains four priced items, an issuer signature, and the client’s separate countersignature. Verification recomputes its body hash, receipt ID, amounts, and signatures. Any edit would break the hash; only accepted terms pass to delivery.
+
+8
+00:01:34,000 --> 00:01:38,000
+Scope Guard. Priced. Approved. Proven.

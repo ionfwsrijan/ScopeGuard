@@ -1,0 +1,1 @@
+The live workspace brings the Northwind engagement, current packet, signed order, and audit status into one view. Open the case to compare each priced commitment, see who must approve, and spot any stale signatures.

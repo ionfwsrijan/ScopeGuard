@@ -30,6 +30,11 @@ receipts/*.json
 .chrome-*/
 .edge-*/
 
+# Demo-video render previews and incomplete mux outputs
+demo/video/preview*.png
+demo/video/scopeguard-demo-4k60.mp4
+demo/video/scopeguard-demo-4k60.*.m4v
+
 # Local env
 .env
 .env.*

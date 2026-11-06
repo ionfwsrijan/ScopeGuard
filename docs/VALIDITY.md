@@ -8,7 +8,7 @@ deliberately out of scope.
 
 | Component | Status | Evidence |
 | --- | --- | --- |
-| Pricing engine | Real, deterministic | `src/scopeguard/assess.py`; full suite: 328 tests |
+| Pricing engine | Real, deterministic | `src/scopeguard/assess.py`; covered by the test suite |
 | Red Team and revisions | Real, deterministic | `src/scopeguard/challenge.py`, tests for every finding code |
 | Signature phrase parsing | Real, strict | `src/scopeguard/receipt.py`, parser tests |
 | Hash-bound signature invalidation | Real | `store.invalidate_approvals`, revision tests |
