@@ -64,10 +64,10 @@ scopeguard --home .scopeguard/standalone verify \
 
 | Judge question | Evidence |
 | --- | --- |
-| Is it built, not mocked? | 304 tests; CLI, API, UI, Switch client, headless Clerk, and demo. |
+| Is it built, not mocked? | 328 tests; CLI, API, UI, Switch client, headless Clerk, and demo. |
 | Is the core correct? | Typed models; pure pricing; canonical JSON; SHA-256 hash chain; Ed25519 issuer and client signatures. |
 | Does it handle failure? | Tamper tests, stale signatures, wrong roles, duplicates, expired evidence, audit tamper, HTTP errors, missing keys. |
-| Is the code quality high? | `ruff check .` and `ruff format --check .` clean; `mypy` clean on 19 source files; CI on Windows and Linux, Python 3.11–3.13. |
+| Is the code quality high? | `ruff check .` and `ruff format --check .` clean; `mypy` clean on 20 source files; CI on Windows and Linux, Python 3.11–3.13. |
 | Is it reproducible? | Frozen clock, deterministic packets, one-command demo, transcript checked in. |
 | Is the security model stated? | `docs/VALIDITY.md` threat model, in scope and out of scope, including key custody. |
 
@@ -182,7 +182,7 @@ but the main submission is Track 01.
 - [x] `docs/BLOG.md`
 - [x] `LICENSE` (MIT)
 - [x] `.github/workflows/ci.yml`
-- [x] 304 tests, ruff clean, mypy clean
+- [x] 328 tests, ruff clean, mypy clean
 
 ## Pre-submit checks
 
