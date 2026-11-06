@@ -192,6 +192,13 @@ boundaries of what the demo proves.
 It includes the branded opening and closing, narration, captions, and direct
 captures of the running Scope Guard interface.
 
+## Try the live demo
+
+Deploy the read-only, synthetic-data showcase with the [Render Blueprint](https://render.com/deploy?repo=https://github.com/ionfwsrijan/ScopeGuard).
+See [`docs/DEPLOY.md`](docs/DEPLOY.md) for setup, health checks, and the free
+service's cold-start behavior. This public demo uses the deterministic replay;
+the live Switch integration remains a separate setup.
+
 ## Project layout
 
 ```
