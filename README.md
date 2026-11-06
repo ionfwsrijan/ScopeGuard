@@ -196,7 +196,9 @@ captures of the running Scope Guard interface.
 
 Deploy the read-only, synthetic-data showcase with the [Render Blueprint](https://render.com/deploy?repo=https://github.com/ionfwsrijan/ScopeGuard).
 See [`docs/DEPLOY.md`](docs/DEPLOY.md) for setup, health checks, and the free
-service's cold-start behavior. This public demo uses the deterministic replay;
+service's cold-start behavior, plus an optional 12-minute Render heartbeat.
+The heartbeat is off by default because it uses nearly all of one service's
+monthly free-hour allocation. This public demo uses the deterministic replay;
 the live Switch integration remains a separate setup.
 
 ## Project layout

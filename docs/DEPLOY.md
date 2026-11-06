@@ -20,6 +20,32 @@ replay.
 No environment secrets are needed for the public demo. Do not add Switch API
 tokens, client keys, or real customer data to this public service.
 
+## Optional keep-awake heartbeat
+
+The [heartbeat Gist](https://gist.github.com/HRIDYANSHU054/6d1bd393a6737d394d037f611085ded0)
+targets a Node app with separate frontend and backend URLs. Scope Guard is a
+single Python service, so its equivalent pings the Render-provided
+`RENDER_EXTERNAL_URL` health endpoint once every 12 minutes. The feature is
+included but **off by default**; no `node-cron`, second service, or manual URL
+is needed.
+
+To enable it for a hackathon/demo window:
+
+1. In Render, open the `scopeguard-demo` service.
+2. Open **Environment** and change `ENABLE_HEARTBEAT` from `false` to `true`.
+3. Save the change and allow Render to redeploy.
+4. In **Logs**, confirm `Render keep-alive enabled (12-minute interval)` and
+   later `Render keep-alive ping succeeded`.
+5. To let the service sleep again, change `ENABLE_HEARTBEAT` back to `false`
+   and redeploy.
+
+This keeps the free service active and can consume roughly 720 of the account's
+750 monthly free instance hours for a full month. Render pools those hours
+across the workspace; exhausting them suspends free services until the next
+month. Enable it only if the reduced cold starts are worth using that quota.
+Render documents the [free service limits](https://render.com/docs/free) and
+the automatic [`RENDER_EXTERNAL_URL`](https://render.com/docs/environment-variables).
+
 ## Free-plan behavior
 
 Render's Free web services spin down after 15 minutes without inbound traffic;

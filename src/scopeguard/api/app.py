@@ -7,8 +7,12 @@ and can be done by anyone holding a change order.
 
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import Iterator
+import logging
+import os
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -20,12 +24,34 @@ from pydantic import ValidationError
 
 from scopeguard import __version__
 from scopeguard.errors import NotFoundError, ScopeError
+from scopeguard.heartbeat import keep_render_awake, render_health_url
 from scopeguard.models import Receipt
 from scopeguard.service import ScopePaths, ScopeService
 from scopeguard.switch.client import SwitchClient, SwitchConfig
 
 PACKAGE = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(PACKAGE / "templates"))
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Start the optional Render free-tier keep-alive task and stop it cleanly."""
+    enabled = os.environ.get("ENABLE_HEARTBEAT", "").strip().lower() == "true"
+    health_url = render_health_url()
+    heartbeat_task: asyncio.Task[None] | None = None
+    if health_url:
+        heartbeat_task = asyncio.create_task(keep_render_awake(health_url))
+        logger.info("Render keep-alive enabled (12-minute interval)")
+    elif enabled:
+        logger.warning("ENABLE_HEARTBEAT is true but RENDER_EXTERNAL_URL is missing")
+    try:
+        yield
+    finally:
+        if heartbeat_task is not None:
+            heartbeat_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await heartbeat_task
 
 
 def _verdict_class(value: str) -> str:
@@ -71,6 +97,7 @@ def create_app(
         title="Scope Guard",
         version=__version__,
         description="Change-order ledger and two-party signature verifier.",
+        lifespan=_lifespan,
     )
     paths = ScopePaths.discover(root=root, home=home, fixture=fixture)
     paths.ensure()
