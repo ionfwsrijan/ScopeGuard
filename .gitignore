@@ -35,6 +35,12 @@ frontend/*.tsbuildinfo
 
 # Demo-video render previews and incomplete mux outputs
 demo/video/preview*.png
+demo/video/capture-preview.png
+demo/video/frame-*-check.png
+demo/video/scopeguard-voiceover-preserved.m4a
+demo/video/wk.mp4
+demo/video/scopeguard-demo-4k60-silent.mp4
+demo/video/scopeguard-demo-final.mp4
 demo/video/scopeguard-demo-4k60.mp4
 demo/video/scopeguard-demo-4k60.*.m4v
 
