@@ -128,6 +128,13 @@ def create_app(
     def demo_page() -> FileResponse:
         return frontend_page()
 
+    @app.get("/demo-video", include_in_schema=False)
+    def demo_video() -> FileResponse:
+        video = Path.cwd() / "demo" / "video" / "scopeguard-demo-youtube.mp4"
+        if not video.is_file():
+            raise HTTPException(status_code=404, detail="Demo video is unavailable.")
+        return FileResponse(str(video), media_type="video/mp4")
+
     @app.post("/verify", response_class=HTMLResponse, include_in_schema=False)
     def legacy_verify_submit() -> FileResponse:
         return frontend_page()

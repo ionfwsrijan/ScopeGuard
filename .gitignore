@@ -30,7 +30,6 @@ receipts/*.json
 .chrome-*/
 .edge-*/
 /frontend/node_modules/
-/src/scopeguard/api/static/app/
 /frontend/public/scopeguard-demo-youtube.mp4
 frontend/*.tsbuildinfo
 

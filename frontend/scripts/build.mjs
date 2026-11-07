@@ -1,17 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const node = process.execPath;
-const publicDir = resolve(root, "public");
-mkdirSync(publicDir, { recursive: true });
-copyFileSync(
-  resolve(root, "../demo/video/scopeguard-demo-youtube.mp4"),
-  resolve(publicDir, "scopeguard-demo-youtube.mp4"),
-);
-
 for (const args of [
   [resolve(root, "node_modules/typescript/bin/tsc"), "-b"],
   [resolve(root, "node_modules/vite/bin/vite.js"), "build"],

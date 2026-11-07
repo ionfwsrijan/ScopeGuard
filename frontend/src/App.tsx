@@ -253,6 +253,7 @@ function Dashboard() {
 
 function DemoPage() {
   const asset = (name: string) => `${import.meta.env.BASE_URL}${name}`;
+  const videoUrl = "/demo-video";
   return <div className="demo-page">
     <header className="demo-intro">
       <Badge variant="outline"><PlayCircle size={13} /> PRODUCT WALKTHROUGH</Badge>
@@ -261,11 +262,11 @@ function DemoPage() {
     </header>
     <section className="demo-player-card" aria-label="Scope Guard demo video">
       <video className="demo-player" controls playsInline preload="metadata" poster={asset("demo-poster.png")} aria-label="Scope Guard product walkthrough">
-        <source src={asset("scopeguard-demo-youtube.mp4")} type="video/mp4" />
+        <source src={videoUrl} type="video/mp4" />
         <track kind="captions" src={asset("narration.vtt")} srcLang="en" label="English" default />
-        Your browser does not support HTML video. <a href={asset("scopeguard-demo-youtube.mp4")}>Download the demo video</a>.
+        Your browser does not support HTML video. <a href={videoUrl}>Download the demo video</a>.
       </video>
-      <div className="demo-player-footer"><span><strong>Scope Guard</strong><small>Priced. Approved. Proven.</small></span><a href={asset("scopeguard-demo-youtube.mp4")} download>Download video <ArrowDownToLine size={15} /></a></div>
+      <div className="demo-player-footer"><span><strong>Scope Guard</strong><small>Priced. Approved. Proven.</small></span><a href={videoUrl} download>Download video <ArrowDownToLine size={15} /></a></div>
     </section>
     <p className="demo-note"><CircleAlert size={15} /> The Switch conversation shown is a solo project-owner request to Codex. It does not depict teammate approvals.</p>
   </div>;

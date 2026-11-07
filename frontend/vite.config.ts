@@ -10,7 +10,7 @@ export default defineConfig(({ command }) => ({
   base: command === "build" ? "/static/app/" : "/",
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": path.resolve(root, "src") } },
-  server: { proxy: { "/api": "http://127.0.0.1:8787" } },
+  server: { proxy: { "/api": "http://127.0.0.1:8787", "/demo-video": "http://127.0.0.1:8787" } },
   build: {
     outDir: path.resolve(root, "../src/scopeguard/api/static/app"),
     emptyOutDir: true,
