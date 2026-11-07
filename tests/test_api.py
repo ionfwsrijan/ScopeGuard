@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from helpers import DEMO_MOMENT, accepted
 from scopeguard.api.app import create_app
@@ -30,21 +30,22 @@ def receipt_payload(client: TestClient) -> dict[str, object]:
 
 
 # ---------------------------------------------------------------------- pages
-def test_index_lists_the_case(client: TestClient) -> None:
+def assert_spa_shell(response: Response) -> None:
+    assert '<div id="root"></div>' in response.text
+    assert "/static/app/assets/" in response.text
+
+
+def test_index_serves_the_react_app(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert "Scope Guard" in response.text
-    assert "Northwind Health" in response.text
-    assert "countersigned" in response.text
+    assert_spa_shell(response)
 
 
-def test_engagement_page_renders_packet_receipt_and_handoff(client: TestClient) -> None:
+def test_engagement_page_serves_the_react_app(client: TestClient) -> None:
     response = client.get("/engagements/northwind-2026")
     assert response.status_code == 200
-    assert "Northwind Health" in response.text
-    assert "Priced packet v2" in response.text
-    assert "Only the line items above leave this room." in response.text
-    assert "42,240.00" in response.text
+    assert_spa_shell(response)
 
 
 def test_receipt_page_and_latest_alias(client: TestClient) -> None:
@@ -53,31 +54,14 @@ def test_receipt_page_and_latest_alias(client: TestClient) -> None:
     direct = client.get(f"/change-orders/{receipt_id}")
     latest = client.get("/engagements/northwind-2026/change-order")
     assert direct.status_code == latest.status_code == 200
-    assert receipt_id in direct.text
-    assert receipt_id in latest.text
-    assert "authentic" in direct.text.lower()
+    assert_spa_shell(direct)
+    assert_spa_shell(latest)
 
 
-def test_verify_page_can_verify_a_pasted_receipt(client: TestClient) -> None:
-    receipt = receipt_payload(client)
-    response = client.post("/verify", data={"receipt": json.dumps(receipt)})
-    assert response.status_code == 200
-    assert "verified" in response.text.lower() or "authentic" in response.text.lower()
-
-
-def test_verify_page_reports_empty_and_invalid_input(client: TestClient) -> None:
-    empty = client.post("/verify", data={"receipt": ""})
-    assert empty.status_code == 200
-    assert "Paste a change-order JSON document" in empty.text
-    invalid = client.post("/verify", data={"receipt": "not json"})
-    assert invalid.status_code == 200
-    assert "not a valid Scope Guard change order" in invalid.text
-
-
-def test_verify_permalink_renders_the_form(client: TestClient) -> None:
+def test_verify_route_serves_the_react_app(client: TestClient) -> None:
     response = client.get("/verify")
     assert response.status_code == 200
-    assert "<textarea" in response.text
+    assert_spa_shell(response)
 
 
 # ------------------------------------------------------------------------ API

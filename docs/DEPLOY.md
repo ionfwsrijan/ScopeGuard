@@ -4,7 +4,8 @@ The repository includes a Render Blueprint for a public, read-only demo of the
 synthetic Northwind engagement. It starts the deterministic demo on each
 deployment and health-checks `/api/health`. It does not connect to Switch or
 receive Switch credentials; the public service uses the bundled `FakeSwitch`
-replay.
+replay. Render builds the React + Vite frontend first, packages its static
+assets with the Python app, and serves the UI and API from one service.
 
 ## Deploy
 

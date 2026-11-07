@@ -1,4 +1,4 @@
-.PHONY: install demo test lint format typecheck serve verify clean
+.PHONY: install frontend-install frontend-build demo test lint format typecheck serve verify clean
 
 ifeq ($(OS),Windows_NT)
 PY ?= py -3
@@ -14,6 +14,12 @@ install:
 	$(PY) -m venv $(VENV)
 	$(BIN)/python -m pip install --upgrade pip
 	$(BIN)/python -m pip install -e ".[dev]"
+
+frontend-install:
+	npm --prefix frontend ci
+
+frontend-build: frontend-install
+	npm --prefix frontend run build
 
 demo:
 	$(BIN)/scopeguard demo --reset
@@ -32,7 +38,7 @@ format:
 typecheck:
 	$(BIN)/mypy
 
-serve:
+serve: frontend-build
 	$(BIN)/scopeguard --root . --home .scopeguard/demo serve --port 8787
 
 verify:

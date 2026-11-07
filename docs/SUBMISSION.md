@@ -86,7 +86,7 @@ scopeguard --home .scopeguard/standalone verify \
 | Judge question | Evidence |
 | --- | --- |
 | Is the story clear? | README opens with the pain, the Northwind story, the flow, and the change order. |
-| Is the demo tight? | The finished 1:38 narrated 4K60 walkthrough is in `demo/video/scopeguard-demo-final.mp4`; `docs/DEMO.md` contains the deeper judge path and live-room script. |
+| Is the demo tight? | The 1:38 narrated 4K60 walkthrough with a live solo owner-to-Codex Switch exchange is in `demo/video/scopeguard-demo-youtube.mp4`; it does not show teammate participation. `docs/DEMO.md` contains the deeper judge path and live-room script. |
 | Are the visuals good? | Ledger, engagement, and change-order views with a consistent palette and checked-in screenshots. |
 | Is it honest? | A dedicated validity document and a demo that labels the simulated transport. The client signs acceptance with a key kept on the client machine. |
 
@@ -135,8 +135,8 @@ signature was never bound to the content.
 > the agents are the interface, not the authority.
 
 **Built with:** Python, FastAPI, Pydantic v2, SQLite, Ed25519
-(`cryptography`), Jinja2, Rich, pytest, ruff, mypy, and the Switch agent
-protocol and room templates.
+(`cryptography`), React, TypeScript, Vite, Tailwind CSS, shadcn/ui components,
+Rich, pytest, ruff, mypy, and the Switch agent protocol and room templates.
 
 ## Track selection
 
@@ -183,7 +183,7 @@ but the main submission is Track 01.
 - [x] `LICENSE` (MIT)
 - [x] `.github/workflows/ci.yml`
 - [x] Test, lint, and type-check commands documented in the quality gates
-- [x] `demo/video/scopeguard-demo-final.mp4` — finished narrated 4K60 walkthrough
+- [x] `demo/video/scopeguard-demo-youtube.mp4` — narrated 4K60 walkthrough with the solo Switch exchange; teammate evidence is still outstanding for Tracks 1 & 2
 
 ## Pre-submit checks
 

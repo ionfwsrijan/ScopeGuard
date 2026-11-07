@@ -11,16 +11,17 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "demo" / "video"
 W, H, FPS = 3840, 2160, 60
-BG = (8, 11, 18)
-PANEL = (18, 24, 37)
-LINE = (44, 54, 74)
-WHITE = (244, 247, 253)
-MUTED = (166, 178, 199)
-DIM = (113, 128, 153)
-LAV = (160, 171, 255)
-TEAL = (79, 223, 181)
-AMBER = (255, 195, 100)
-RED = (255, 112, 132)
+BG = (245, 244, 239)
+BRAND_BG = (17, 18, 15)
+PANEL = (255, 255, 252)
+LINE = (224, 225, 217)
+WHITE = (25, 27, 22)
+MUTED = (91, 95, 83)
+DIM = (123, 126, 116)
+LAV = (197, 239, 67)
+TEAL = (91, 125, 47)
+AMBER = (194, 137, 32)
+RED = (181, 73, 65)
 FONT = r"C:\Windows\Fonts\Candara.ttf"
 FONT_B = r"C:\Windows\Fonts\bahnschrift.ttf"
 FONT_M = r"C:\Windows\Fonts\consola.ttf"
@@ -80,12 +81,12 @@ def paragraph(d, xy, text, size=46, color=MUTED, width=1350, gap=17, bold=False)
 
 def chrome_header(d, num, section):
     # Always leave room for the real interface and its key content.
-    d.rectangle((0, 0, W, 156), fill=(8, 11, 18, 228))
-    d.rounded_rectangle((58, 30, 106, 80), radius=13, fill=(19, 26, 41), outline=(52, 67, 96), width=2)
-    label(d, (82, 55), "SG", 19, TEAL, True, True, "mm")
-    label(d, (124, 43), "SCOPE GUARD", 32, WHITE, True)
-    label(d, (126, 92), "SCOPE MANAGEMENT  /  FLIP THE SWITCH 2026", 20, DIM, True, True)
-    label(d, (W - 105, 58), f"{num:02d}  /  08", 27, MUTED, True, True, "ra")
+    d.rectangle((0, 0, W, 156), fill=(*BRAND_BG, 245))
+    d.rounded_rectangle((58, 30, 106, 80), radius=13, fill=(39, 42, 31), outline=(75, 83, 54), width=2)
+    label(d, (82, 55), "SG", 19, LAV, True, True, "mm")
+    label(d, (124, 43), "SCOPE GUARD", 32, (250, 250, 244), True)
+    label(d, (126, 92), "SCOPE MANAGEMENT  /  FLIP THE SWITCH 2026", 20, (145, 150, 133), True, True)
+    label(d, (W - 105, 58), f"{num:02d}  /  08", 27, (230, 232, 220), True, True, "ra")
     label(d, (W - 105, 104), section.upper(), 21, LAV, True, True, "ra")
     d.line((100, 155, W - 100, 155), fill=LINE, width=2)
 
@@ -94,8 +95,8 @@ def title_slide(section, title, subtitle, number):
     im = Image.new("RGB", (W, H), BG).convert("RGBA")
     glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     g = ImageDraw.Draw(glow)
-    g.ellipse((2200, -700, 4350, 1400), fill=(71, 90, 186, 34))
-    g.ellipse((-900, 1050, 1100, 2950), fill=(36, 142, 126, 21))
+    g.ellipse((2200, -700, 4350, 1400), fill=(155, 194, 55, 34))
+    g.ellipse((-900, 1050, 1100, 2950), fill=(94, 132, 48, 24))
     glow = glow.filter(ImageFilter.GaussianBlur(210))
     im = Image.alpha_composite(im, glow).convert("RGB")
     d = ImageDraw.Draw(im)
@@ -111,33 +112,32 @@ def title_slide(section, title, subtitle, number):
 
 
 def brand_slide(slogan: str) -> Image.Image:
-    """Minimal four-second brand lockup with an SG focus-frame monogram."""
-    im = Image.new("RGB", (W, H), BG).convert("RGBA")
+    """Minimal four-second brand lockup using the app's lime crosshair mark."""
+    im = Image.new("RGB", (W, H), BRAND_BG).convert("RGBA")
     glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     gd = ImageDraw.Draw(glow)
-    gd.ellipse((970, 580, 2790, 1580), fill=(55, 78, 157, 34))
-    gd.ellipse((1140, 720, 2060, 1430), fill=(45, 156, 137, 18))
+    gd.ellipse((970, 580, 2790, 1580), fill=(142, 177, 43, 32))
+    gd.ellipse((1140, 720, 2060, 1430), fill=(64, 103, 30, 24))
     glow = glow.filter(ImageFilter.GaussianBlur(220))
     im = Image.alpha_composite(im, glow).convert("RGB")
     d = ImageDraw.Draw(im)
-    # An open focus-frame around the SG monogram, drawn without a badge silhouette.
-    x, y, size = 1370, 920, 300
-    inset, arm, stroke = 22, 55, 10
-    brackets = [
-        ((x + inset, y + inset), (x + inset + arm, y + inset), (x + inset, y + inset + arm)),
-        ((x + size - inset, y + inset), (x + size - inset - arm, y + inset), (x + size - inset, y + inset + arm)),
-        ((x + inset, y + size - inset), (x + inset + arm, y + size - inset), (x + inset, y + size - inset - arm)),
-        ((x + size - inset, y + size - inset), (x + size - inset - arm, y + size - inset), (x + size - inset, y + size - inset - arm)),
-    ]
-    for i, (corner, horiz, vert) in enumerate(brackets):
-        color = LAV if i in (0, 3) else TEAL
-        d.line((corner, horiz), fill=color, width=stroke)
-        d.line((corner, vert), fill=color, width=stroke)
-    label(d, (x + 103, y + 151), "S", 130, WHITE, True, False, "mm")
-    label(d, (x + 195, y + 151), "G", 130, TEAL, True, False, "mm")
-    label(d, (1760, 994), "SCOPE GUARD", 96, WHITE, True, True)
-    d.line((1764, 1115, 2510, 1115), fill=(49, 61, 84), width=3)
-    label(d, (1765, 1175), slogan, 40, MUTED)
+    # The app's crosshair symbol, enlarged for a simple branded opening/close.
+    x, y, size = 1748, 515, 344
+    d.rounded_rectangle((x, y, x + size, y + size), radius=92, fill=LAV)
+    cx, cy = x + size // 2, y + size // 2
+    d.ellipse((cx - 70, cy - 70, cx + 70, cy + 70), outline=BRAND_BG, width=10)
+    d.line((cx, cy - 105, cx, cy + 105), fill=BRAND_BG, width=10)
+    d.line((cx - 105, cy, cx + 105, cy), fill=BRAND_BG, width=10)
+    brand_font = f(124, True)
+    first, second = "scope", "guard"
+    first_w = d.textbbox((0, 0), first, font=brand_font)[2]
+    second_w = d.textbbox((0, 0), second, font=brand_font)[2]
+    brand_x = (W - first_w - second_w - 6) // 2
+    d.text((brand_x, 980), first, font=brand_font, fill=(250, 250, 244))
+    d.text((brand_x + first_w + 6, 980), second, font=brand_font, fill=LAV)
+    label(d, (W // 2, 1145), "COMMITMENT CONTROL", 23, (145, 150, 133), True, True, "ma")
+    d.line((1465, 1240, 2375, 1240), fill=(54, 58, 45), width=3)
+    label(d, (W // 2, 1325), slogan, 44, (228, 231, 218), False, False, "ma")
     return im
 
 
@@ -179,18 +179,18 @@ def make_slides():
         scene = source.convert("RGBA")
         layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         ld = ImageDraw.Draw(layer)
-        ld.rounded_rectangle((100, H - 142, 1050, H - 64), radius=28, fill=(8, 11, 18, 228), outline=LINE, width=2)
+        ld.rounded_rectangle((100, H - 142, 1050, H - 64), radius=28, fill=(*BRAND_BG, 232), outline=(66, 74, 47), width=2)
         label(ld, (140, H - 120), f"{num:02d}  /  LIVE APP  ·  {title.upper()}", 22, TEAL, True, True)
         scene = Image.alpha_composite(scene, layer).convert("RGB")
         slides.append(scene)
 
     im = title_slide("The independent challenge", "The first answer\ngets blocked.", "At 20% off, gross margin falls to 27.5%, below the 30% floor. The independent Red Team blocks the packet; policy narrows the discount to 12%.", 6)
     d = ImageDraw.Draw(im)
-    rr(d, (175, 1175, 1680, 1585), (43, 21, 32), outline=(119, 48, 68), radius=32)
+    rr(d, (175, 1175, 1680, 1585), (255, 235, 232), outline=(220, 145, 134), radius=32)
     label(d, (235, 1228), "PACKET V1  ·  BLOCKED", 26, RED, True, True)
     label(d, (235, 1310), "27.50%", 78, WHITE, True)
     label(d, (235, 1432), "MARGIN  ·  BELOW THE 30% FLOOR", 25, RED, True, True)
-    rr(d, (1780, 1175, 3440, 1585), (17, 38, 34), outline=(54, 106, 90), radius=32)
+    rr(d, (1780, 1175, 3440, 1585), (238, 246, 220), outline=(160, 185, 90), radius=32)
     label(d, (1840, 1228), "REVISED PACKET V2  ·  APPROVED", 26, TEAL, True, True)
     label(d, (1840, 1310), "$42,240", 78, WHITE, True)
     label(d, (1840, 1432), "$3,840 MARGIN PROTECTED  ·  12% DISCOUNT", 25, TEAL, True, True)
@@ -198,12 +198,13 @@ def make_slides():
 
     im = title_slide("How it fits together", "Agents coordinate.\nThe core decides.", "Switch agents coordinate the workflow around a deterministic pricing core. Human signatures bind to the exact packet hash, and the linked delivery room receives only the signed scope.", 5)
     d = ImageDraw.Draw(im)
+    tag(d, 175, 1080, "DETERMINISTIC REPLAY", LAV)
     nodes = [("SWITCH", "Coordinate"), ("SCOUT", "Evidence"), ("PRICER", "Deterministic price"), ("RED TEAM", "Challenge"), ("HUMANS", "Approve hash"), ("CLERK", "Seal + verify"), ("DELIVERY", "Signed scope")]
     x0, gap, cw, y = 115, 29, 490, 1190
     for i, (head, body) in enumerate(nodes):
         x = x0 + i * (cw + gap)
         rr(d, (x, y, x + cw, y + 272), PANEL, radius=26)
-        label(d, (x + 31, y + 36), head, 25, (LAV, TEAL, AMBER, RED, LAV, TEAL, TEAL)[i], True, True)
+        label(d, (x + 31, y + 36), head, 25, (TEAL, TEAL, AMBER, RED, TEAL, TEAL, TEAL)[i], True, True)
         paragraph(d, (x + 30, y + 102), body, 38, WHITE, cw - 60, 9, True)
         if i < len(nodes) - 1:
             d.line((x + cw + 5, y + 136, x + cw + gap - 6, y + 136), fill=DIM, width=5)

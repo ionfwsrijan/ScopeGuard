@@ -21,7 +21,7 @@ deliberately out of scope.
 | Headless Clerk | Real | `switch/clerk.py`, in-memory room tests |
 | Switch group template | Real format, validated by hand | `templates/scopeguard.template.yaml` |
 | CLI | Real | `cli.py`, CLI tests |
-| FastAPI UI and JSON API | Real | `api/app.py`, route tests |
+| React UI + FastAPI JSON API | Real | `frontend/src`, `api/app.py` |
 | Demo | Real flow, simulated transport | `demo.py` |
 
 The bundled flow signs a **two-party change order**. The issuer signs the

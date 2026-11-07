@@ -90,6 +90,8 @@ The full run is reproducible in one command and checked in at
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python -m pip install -e ".[dev]"
+npm --prefix frontend ci
+npm --prefix frontend run build
 .\.venv\Scripts\scopeguard demo --reset
 .\.venv\Scripts\scopeguard serve --demo --reset --port 8787
 ```
@@ -97,12 +99,18 @@ py -3 -m venv .venv
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
+npm --prefix frontend ci
+npm --prefix frontend run build
 .venv/bin/scopeguard demo --reset
 .venv/bin/scopeguard serve --demo --reset --port 8787
 ```
 
 Open `http://127.0.0.1:8787/`. The `serve --demo` option builds a populated
 demo ledger before the dashboard starts, including on a clean checkout.
+
+The dashboard is a React + Vite single-page app with locally maintained
+shadcn/ui components. FastAPI still owns the ledger, receipts, audit chain, and
+verification APIs; the production build is served from the same origin.
 
 The demo is deterministic. The clock is frozen at `2026-11-04`, keys are
 generated in a temporary home, and the same inputs always produce the same
@@ -188,13 +196,13 @@ boundaries of what the demo proves.
 
 ## Full demo video
 
-[Watch the complete 1:38 walkthrough (4K, 60 fps)](demo/video/scopeguard-demo-final.mp4).
+[Watch the final 1:38 walkthrough with the Switch agent conversation (4K, 60 fps)](demo/video/scopeguard-demo-youtube.mp4).
 It includes the branded opening and closing, narration, captions, and direct
 captures of the running Scope Guard interface.
 
 ## Try the live demo
 
-Deploy the read-only, synthetic-data showcase with the [Render Blueprint](https://render.com/deploy?repo=https://github.com/ionfwsrijan/ScopeGuard).
+Open the [live app](https://scopeguard-demo.onrender.com/) or [watch the walkthrough in the live app](https://scopeguard-demo.onrender.com/demo). Deploy the read-only, synthetic-data showcase with the [Render Blueprint](https://render.com/deploy?repo=https://github.com/ionfwsrijan/ScopeGuard).
 See [`docs/DEPLOY.md`](docs/DEPLOY.md) for setup, health checks, and the free
 service's cold-start behavior, plus an optional 12-minute Render heartbeat.
 The heartbeat is off by default because it uses nearly all of one service's
@@ -212,7 +220,8 @@ src/scopeguard/
   service.py       one orchestration layer for CLI, API, demo, and agents
   store.py         SQLite ledger and append-only audit chain
   switch/          Switch client, room protocol, and the deterministic Clerk
-  api/             FastAPI UI and JSON API
+  api/             FastAPI JSON API and packaged React build
+frontend/          React + Vite app and shadcn/ui primitives
 fixtures/northwind/   engagement, evidence, approvers, room messages
 policies/             scope_policy_v1.yaml
 tests/                coverage for the core, CLI, API, Clerk, and demo

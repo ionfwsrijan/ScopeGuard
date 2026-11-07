@@ -29,6 +29,10 @@ receipts/*.json
 # Local browser profiles used for screenshots
 .chrome-*/
 .edge-*/
+/frontend/node_modules/
+/src/scopeguard/api/static/app/
+/frontend/public/scopeguard-demo-youtube.mp4
+frontend/*.tsbuildinfo
 
 # Demo-video render previews and incomplete mux outputs
 demo/video/preview*.png

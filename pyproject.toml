@@ -26,7 +26,6 @@ dependencies = [
   "PyYAML>=6.0.2",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.30",
-  "jinja2>=3.1",
   "python-multipart>=0.0.9",
   "httpx>=0.27",
   "websockets>=13",
@@ -50,7 +49,12 @@ scopeguard = "scopeguard.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-scopeguard = ["api/templates/*.html", "api/static/*.css", "api/static/*.svg"]
+scopeguard = [
+  "api/static/*.css",
+  "api/static/*.svg",
+  "api/static/app/*",
+  "api/static/app/assets/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
